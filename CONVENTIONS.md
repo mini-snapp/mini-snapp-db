@@ -28,3 +28,10 @@
 - core:  shared or core infrastructure
 - food:  food ordering service
 - taxi:  taxi service
+- 
+## Data Types
+
+Money:        DECIMAL(10,2)
+Percentage:   DECIMAL(5,2)
+Latitude:     DECIMAL(10,8)
+Longitude:    DECIMAL(11,8)
