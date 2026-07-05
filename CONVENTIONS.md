@@ -28,3 +28,21 @@
 - core:  shared or core infrastructure
 - food:  food ordering service
 - taxi:  taxi service
+- 
+## Data Types
+
+- Money:        DECIMAL(10,2)
+- Percentage:   DECIMAL(5,2)
+- Latitude:     DECIMAL(10,8)
+- Longitude:    DECIMAL(11,8)
+- first_name, last_name         VARCHAR(50)
+- username                      VARCHAR(50)
+- email                         VARCHAR(100)
+- password (hashed)             VARCHAR(255)
+- phone (registration/business/secondary)  VARCHAR(15)
+- national_id                   VARCHAR(15)
+- license_plate                 VARCHAR(15)
+- address_name, city, province, street     VARCHAR(100)
+- code (coupon)                 VARCHAR(20)
+- status, type, role_name, operation_type  VARCHAR(20)
+- title (complaint)             VARCHAR(150)
