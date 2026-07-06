@@ -1,4 +1,3 @@
-
 CREATE TABLE core.roles (
     role_id INT IDENTITY(1,1) NOT NULL,
     role_name VARCHAR(20) NOT NULL,
