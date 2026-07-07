@@ -437,3 +437,6 @@ FodyWeavers.xsd
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# diagram files
+*.bkp

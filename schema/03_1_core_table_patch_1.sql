@@ -1,5 +1,6 @@
 -- add hierarchy_level to roles
-
+USE mini_snapp
+GO
 ALTER TABLE core.roles ADD hierarchy_level INT NOT NULL DEFAULT 0;
 
 /*

@@ -1,3 +1,5 @@
+USE mini_snapp
+GO
 
 CREATE TABLE core.roles (
     role_id INT IDENTITY(1,1) NOT NULL,
