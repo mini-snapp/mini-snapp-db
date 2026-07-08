@@ -11,3 +11,7 @@ GO
 
 create schema taxi
 
+GO
+
+CREATE SCHEMA test
+
