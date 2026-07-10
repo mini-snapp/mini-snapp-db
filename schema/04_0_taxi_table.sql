@@ -190,9 +190,7 @@ CREATE TABLE taxi.rides(
             (started_at IS NULL OR accepted_at IS NULL OR started_at >= accepted_at) AND
             (completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at)
         )
-    -- NOTE: consistency between rides.service_type and the vehicle's
-    -- supported service types (via vehicle_type_services) must be enforced
-    -- with a trigger, since it spans multiple tables (rides + vehicles).
+
 );
 
 GO
