@@ -1,21 +1,6 @@
 USE mini_snapp;
 GO
 
-CREATE PROCEDURE food.sp_create_menu_discount
-    @menu_item_id INT,
-    @percentage DECIMAL(5,2) = NULL,
-    @amount DECIMAL(10,2) = NULL,
-    @start_at DATETIME2,
-    @end_at DATETIME2
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO food.menu_discounts (menu_item_id, percentage, amount, start_at, end_at, is_active)
-    VALUES (@menu_item_id, @percentage, @amount, @start_at, @end_at, 1);
-END
-
-GO
-
 
 CREATE PROCEDURE food.sp_add_to_cart
     @user_id INT,
