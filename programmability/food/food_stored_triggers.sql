@@ -83,30 +83,3 @@ END
 
 GO
 
-CREATE TRIGGER food.trg_branches_audit
-ON food.branches
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DECLARE @actor_id INT = TRY_CAST(SESSION_CONTEXT(N'current_user_id') AS INT);
-
-    INSERT INTO food.food_logs (actor_id, operation_type, schema_name, target_table, target_id, old_value, new_value, log_timestamp, description, branch_id)
-    SELECT
-        @actor_id,
-        'UPDATE',
-        'food',
-        'branches',
-        CAST(i.branch_id AS VARCHAR(50)),
-        (SELECT d.is_active, d.rating FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
-        (SELECT i.is_active, i.rating FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
-        SYSDATETIME(),
-        'Automatic audit log for branch update',
-        i.branch_id
-    FROM inserted i
-    JOIN deleted d ON d.branch_id = i.branch_id
-    WHERE i.is_active <> d.is_active OR i.rating <> d.rating;
-END
-
-GO
