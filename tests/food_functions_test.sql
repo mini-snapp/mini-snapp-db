@@ -26,7 +26,7 @@ SELECT * FROM food.fn_branches_within_distance(36.289500, 50.004000, 5.00);
 GO
 
 PRINT 'fn_is_branch_open';
-DECLARE @branch1 INT = (SELECT b.branch_id FROM food.branches b JOIN food.brands br ON br.brand_id = b.brand_id WHERE br.name = 'Zeytoon Grill' AND b.city = 'Tehran');
+DECLARE @branch1 INT = (SELECT b.branch_id FROM food.branches b JOIN food.brands br ON br.brand_id = b.brand_id WHERE br.name = 'zeytoon grill' AND b.city = 'tehran');
 PRINT 'scenario 1: wednesday at 12';
 SELECT food.fn_is_branch_open(@branch1, '2026-07-08 12:00:00') AS is_open; 
 PRINT 'scenario 2: friday at 12';
@@ -59,8 +59,8 @@ GO
 PRINT 'fn_calculate_cart_total';
 DECLARE @u_sara INT = (SELECT user_id FROM core.users WHERE username = 'sara_ahmadi');
 DECLARE @u_reza INT = (SELECT user_id FROM core.users WHERE username = 'reza_karimi');
-DECLARE @branch1 INT = (SELECT b.branch_id FROM food.branches b JOIN food.brands br ON br.brand_id = b.brand_id WHERE br.name = 'Zeytoon Grill' AND b.city = 'Tehran');
-DECLARE @branch7 INT = (SELECT b.branch_id FROM food.branches b JOIN food.brands br ON br.brand_id = b.brand_id WHERE br.name = 'Sib Sabz Vegan' AND b.city = 'Tehran');
+DECLARE @branch1 INT = (SELECT b.branch_id FROM food.branches b JOIN food.brands br ON br.brand_id = b.brand_id WHERE br.name = 'zeytoon Grill' AND b.city = 'tehran');
+DECLARE @branch7 INT = (SELECT b.branch_id FROM food.branches b JOIN food.brands br ON br.brand_id = b.brand_id WHERE br.name = 'sib sabz vegan' AND b.city = 'tehran');
 PRINT 'scenario 1: sara_ahmadi cart at branch1';
 SELECT food.fn_calculate_cart_total(@u_sara, @branch1) AS cart_total;
 PRINT 'scenario 2: sara_ahmadi cart at branch7 where she has no items in session';
