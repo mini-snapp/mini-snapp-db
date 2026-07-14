@@ -65,7 +65,7 @@ PRINT 'scenario 1: sara_ahmadi cart at branch1';
 SELECT food.fn_calculate_cart_total(@u_sara, @branch1) AS cart_total;
 PRINT 'scenario 2: sara_ahmadi cart at branch7 where she has no items in session';
 SELECT food.fn_calculate_cart_total(@u_sara, @branch7) AS cart_total;
-PRINT 'scenario 3: reza_karimi cart at branch1 (likely empty), expect 0';
+PRINT 'scenario 3: reza_karimi cart at branch1';
 SELECT food.fn_calculate_cart_total(@u_reza, @branch1) AS cart_total;
 PRINT 'scenario 4: nonexistent user_id and branch_id';
 SELECT food.fn_calculate_cart_total(-1, -1) AS cart_total;
