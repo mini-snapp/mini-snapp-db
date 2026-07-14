@@ -83,11 +83,11 @@ SELECT food.fn_calculate_order_total(-1) AS order_total;
 GO
 
 PRINT ' fn_can_cancel_order';
-DECLARE @order_pending INT = (SELECT order_id FROM food.food_orders WHERE status = 'pending');
-DECLARE @order_preparing INT = (SELECT order_id FROM food.food_orders WHERE status = 'preparing');
+DECLARE @order_pending INT = (SELECT TOP 1 order_id FROM food.food_orders WHERE status = 'pending');
+DECLARE @order_preparing INT = (SELECT TOP 1 order_id FROM food.food_orders WHERE status = 'preparing');
 DECLARE @order_delivered INT = (SELECT TOP 1 order_id FROM food.food_orders WHERE status = 'delivered');
-DECLARE @order_cancelled INT = (SELECT order_id FROM food.food_orders WHERE status = 'cancelled');
-DECLARE @order_picked_up INT = (SELECT order_id FROM food.food_orders WHERE status = 'picked_up');
+DECLARE @order_cancelled INT = (SELECT TOP 1 order_id FROM food.food_orders WHERE status = 'cancelled');
+DECLARE @order_picked_up INT = (SELECT TOP 1 order_id FROM food.food_orders WHERE status = 'picked_up');
 PRINT 'scenario 1: user cancels pending order';
 SELECT food.fn_can_cancel_order(@order_pending, 'user') AS can_cancel;
 PRINT 'scenario 2: user cancels preparing order';
