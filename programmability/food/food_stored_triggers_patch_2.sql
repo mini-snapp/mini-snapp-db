@@ -86,34 +86,6 @@ IF OBJECT_ID('food.trg_food_orders_delivered_charge', 'TR') IS NOT NULL
     DROP TRIGGER food.trg_food_orders_delivered_charge;
 GO
 
-CREATE TRIGGER food.trg_food_orders_delivered_charge
-ON food.food_orders
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    IF NOT UPDATE(status) RETURN;
-    DECLARE @order_id INT, @customer_id INT, @final_price DECIMAL(10,2), @branch_id INT;
-    SELECT TOP 1
-        @order_id = i.order_id, @customer_id = i.customer_id,
-        @final_price = i.final_price, @branch_id = i.branch_id
-    FROM inserted i JOIN deleted d ON d.order_id = i.order_id
-    WHERE i.status = 'delivered' AND d.status <> 'delivered' AND NOT EXISTS (SELECT 1 FROM food.order_payments op WHERE op.order_id = i.order_id);
-    IF @order_id IS NOT NULL
-    BEGIN
-        INSERT INTO core.transactions (user_id, transaction_type, transaction_status, amount, payment_method, coupon_id, created_at)
-        VALUES (@customer_id, 'order_payment', 'completed', @final_price, 'wallet', NULL, SYSDATETIME());
-        DECLARE @txn_id INT = SCOPE_IDENTITY();
-        INSERT INTO food.order_payments (order_id, transaction_id)
-        VALUES (@order_id, @txn_id);
-        EXEC food.sp_write_log
-            @actor_id = @customer_id, @operation_type = 'insert', @target_table = 'order_payments',
-            @target_id = @order_id, @old_value = NULL, @new_value = NULL,
-            @description = 'Order delivered — customer automatically charged via wallet', @branch_id = @branch_id;
-    END
-END
-
-GO
 
 IF OBJECT_ID('food.trg_branches_audit', 'TR') IS NOT NULL
     DROP TRIGGER food.trg_branches_audit;
