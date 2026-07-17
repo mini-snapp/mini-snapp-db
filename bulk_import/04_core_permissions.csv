@@ -1,0 +1,6 @@
+permission_name,permission_description
+can_ban_user,Block or unblock user accounts
+can_create_coupon,Generate new discount codes
+can_resolve_complaint,Review and resolve submitted complaints
+can_manage_drivers,Approve or suspend driver accounts
+can_view_financials,Access to platform wallet and revenue

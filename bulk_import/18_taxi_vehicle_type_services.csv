@@ -1,0 +1,5 @@
+vehicle_type,service_type
+economy,passenger
+premium,passenger
+motorcycle,cargo
+pickup,cargo

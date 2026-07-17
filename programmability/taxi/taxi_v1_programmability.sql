@@ -1,18 +1,18 @@
-USE mini_snapp
+USE mini_snapp;
 GO
 
 
--- helper stored procedures
+-- 1. Helper Stored Procedures
 
-
-CREATE PROCEDURE taxi.sp_write_log
+CREATE OR ALTER PROCEDURE taxi.sp_write_log
     @actor_id INT = NULL,
     @operation_type VARCHAR(10),
+    @schema_name VARCHAR(10) = 'taxi',
     @target_table VARCHAR(50),
     @target_id VARCHAR(50),
     @old_value NVARCHAR(MAX) = NULL,
     @new_value NVARCHAR(MAX) = NULL,
-    @description VARCHAR(500) = NULL,
+    @description NVARCHAR(MAX) = NULL,
     @driver_id INT = NULL,
     @ride_id INT = NULL
 AS
@@ -20,15 +20,15 @@ BEGIN
     SET NOCOUNT ON;
 
     INSERT INTO taxi.taxi_logs
-        (actor_id, operation_type, target_table, target_id,
+        (actor_id, operation_type, schema_name, target_table, target_id,
              old_value, new_value, [description], driver_id, ride_id)
     VALUES
-        (@actor_id, @operation_type, @target_table, 
+        (@actor_id, @operation_type, @schema_name, @target_table, 
             @target_id, @old_value, @new_value, @description, @driver_id, @ride_id);
 END
 GO
 
-CREATE PROCEDURE taxi.sp_register_driver
+CREATE OR ALTER PROCEDURE taxi.sp_register_driver
     @user_id INT,
     @national_id VARCHAR(15),
     @date_of_birth DATE,
@@ -38,38 +38,40 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF EXISTS (SELECT 1 FROM taxi.drivers WHERE user_id = @user_id)
+    BEGIN
+        RAISERROR('User is already registered as a driver.', 16, 1);
+        RETURN;
+    END
+
+    DECLARE @driver_role_id INT = (SELECT role_id FROM core.roles WHERE role_name = 'driver');
 
     BEGIN TRY
         BEGIN TRANSACTION;
         
-        INSERT INTO taxi.drivers 
-            (user_id, national_id, date_of_birth, gender)
-        VALUES 
-            (@user_id, @national_id, @date_of_birth, @gender);
+        INSERT INTO taxi.drivers (user_id, national_id, date_of_birth, gender)
+        VALUES (@user_id, @national_id, @date_of_birth, @gender);
         
         SET @new_driver_id = SCOPE_IDENTITY();
         
-        INSERT INTO taxi.driver_wallets
-            (driver_id, balance)
-        VALUES
-            (@new_driver_id, 0);
-        
+        UPDATE core.users
+        SET role_id = @driver_role_id
+        WHERE user_id = @user_id;
+
+        INSERT INTO taxi.driver_wallets (driver_id, balance)
+        VALUES (@new_driver_id, 0);
+
         COMMIT TRANSACTION;
-    
     END TRY
     BEGIN CATCH
-    
-        IF @@TRANCOUNT > 0 
-        BEGIN
+        IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-            ;THROW;
-        END
-    
+        ;THROW;
     END CATCH
 END
 GO
 
-CREATE PROCEDURE taxi.sp_register_vehicle
+CREATE OR ALTER PROCEDURE taxi.sp_register_vehicle
     @owner_id INT,
     @vehicle_type VARCHAR(20),
     @license_plate VARCHAR(20),
@@ -88,9 +90,11 @@ BEGIN
 END
 GO
 
--- pricing and search functions
 
-CREATE FUNCTION taxi.fn_get_active_pricing_parameter
+-- 2. Pricing and Search Functions
+
+
+CREATE OR ALTER FUNCTION taxi.fn_get_active_pricing_parameter
 (
     @vehicle_type VARCHAR(20),
     @service_type VARCHAR(20),
@@ -110,7 +114,7 @@ RETURN
 );
 GO
 
-CREATE FUNCTION taxi.fn_calculate_ride_price
+CREATE OR ALTER FUNCTION taxi.fn_calculate_ride_price
 (
     @vehicle_type VARCHAR(20),
     @service_type VARCHAR(20),
@@ -121,7 +125,6 @@ CREATE FUNCTION taxi.fn_calculate_ride_price
 RETURNS DECIMAL(10,2)
 AS
 BEGIN
-
     DECLARE @base_fare DECIMAL(10,2);
     DECLARE @price_per_km DECIMAL(10,2);
     DECLARE @price_per_minute DECIMAL(10,2);
@@ -142,7 +145,7 @@ BEGIN
 END
 GO
 
-CREATE FUNCTION taxi.fn_vehicle_supports_service
+CREATE OR ALTER FUNCTION taxi.fn_vehicle_supports_service
 (
     @vehicle_id INT,
     @service_type VARCHAR(20)
@@ -165,7 +168,7 @@ BEGIN
 END
 GO
 
-CREATE FUNCTION taxi.fn_find_nearest_available_drivers -- optimization needed!!
+CREATE OR ALTER FUNCTION taxi.fn_find_nearest_available_drivers
 (
     @origin_latitude DECIMAL(10,8),
     @origin_longitude DECIMAL(11,8),
@@ -193,10 +196,10 @@ RETURN
 );
 GO
 
+-- 3. Ride State Machine Procedures
 
--- control ride state
 
-CREATE PROCEDURE taxi.sp_create_ride_offer
+CREATE OR ALTER PROCEDURE taxi.sp_create_ride_offer
     @passenger_id INT,
     @origin_latitude DECIMAL(10,8),
     @origin_longitude DECIMAL(11,8),
@@ -206,17 +209,12 @@ CREATE PROCEDURE taxi.sp_create_ride_offer
     @service_type VARCHAR(20),
     @candidate_count INT = 5,
     @offer_ttl_minutes INT = 3,
+    @is_prepaid BIT = 0,
+    @scheduled_start_time DATETIME = NULL,
     @new_offer_id INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @distance_km DECIMAL(10,2) = 
-        core.fn_calculate_distance_km(@origin_latitude, @origin_longitude, 
-            @destination_latitude, @destination_longitude);
-    DECLARE @price DECIMAL(10,2) = 
-        taxi.fn_calculate_ride_price(@vehicle_type, @service_type, 
-            @distance_km, NULL, NULL);
- 
 
     IF NOT EXISTS (
         SELECT 1 
@@ -228,6 +226,14 @@ BEGIN
         RAISERROR('The requested vehicle type does not support the requested service type.', 16, 1);
         RETURN;
     END
+
+    DECLARE @distance_km DECIMAL(10,2) = 
+        core.fn_calculate_distance_km(@origin_latitude, @origin_longitude, 
+            @destination_latitude, @destination_longitude);
+            
+    DECLARE @price DECIMAL(10,2) = 
+        taxi.fn_calculate_ride_price(@vehicle_type, @service_type, 
+            @distance_km, NULL, NULL);
 
     IF @price IS NULL
     BEGIN
@@ -241,12 +247,13 @@ BEGIN
         INSERT INTO taxi.ride_offers 
             (passenger_id, origin_latitude, origin_longitude, destination_latitude,
              destination_longitude, calculated_price, 
-                vehicle_type, service_type, expires_at)
-
+             vehicle_type, service_type, expires_at,
+             is_prepaid, scheduled_start_time)
         VALUES 
             (@passenger_id, @origin_latitude, @origin_longitude, 
-                @destination_latitude, @destination_longitude, @price,
-                @vehicle_type, @service_type, DATEADD(MINUTE, @offer_ttl_minutes, GETDATE()));
+             @destination_latitude, @destination_longitude, @price,
+             @vehicle_type, @service_type, DATEADD(MINUTE, @offer_ttl_minutes, GETDATE()),
+             @is_prepaid, @scheduled_start_time);
  
         SET @new_offer_id = SCOPE_IDENTITY();
  
@@ -269,7 +276,7 @@ BEGIN
 END
 GO
 
-CREATE PROCEDURE taxi.sp_respond_to_ride_offer
+CREATE OR ALTER PROCEDURE taxi.sp_respond_to_ride_offer
     @offer_id INT,
     @driver_id INT,
     @response VARCHAR(20),
@@ -277,12 +284,12 @@ CREATE PROCEDURE taxi.sp_respond_to_ride_offer
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     IF @response NOT IN ('accepted','rejected')
     BEGIN
         RAISERROR('Response must be either accepted or rejected.', 16, 1);
         RETURN;
     END
-    
 
     IF NOT EXISTS (
         SELECT 1 
@@ -320,6 +327,11 @@ BEGIN
             DECLARE @now DATETIME = GETDATE();
             DECLARE @expires_at DATETIME;
             DECLARE @requested_at DATETIME;
+            
+            DECLARE @is_prepaid BIT;
+            DECLARE @scheduled_start_time DATETIME;
+            DECLARE @initial_payment_status VARCHAR(20);
+            DECLARE @initial_ride_status VARCHAR(20);
  
             SELECT 
                 @passenger_id = passenger_id,
@@ -331,7 +343,9 @@ BEGIN
                 @vehicle_type = vehicle_type,
                 @service_type = service_type,
                 @requested_at = requested_at,
-                @expires_at = expires_at
+                @expires_at = expires_at,
+                @is_prepaid = is_prepaid,
+                @scheduled_start_time = scheduled_start_time
             FROM taxi.ride_offers 
             WHERE ride_offer_id = @offer_id;
  
@@ -358,29 +372,39 @@ BEGIN
             IF @expires_at <= GETDATE()
             BEGIN
                 RAISERROR('The offer has already expired!', 16, 1);
+                ROLLBACK TRANSACTION;
                 RETURN;
             END
  
             SET @distance_km = core.fn_calculate_distance_km(@origin_lat, @origin_lng, @dest_lat, @dest_lng);
+            
+            SET @initial_payment_status = CASE WHEN @is_prepaid = 1 THEN 'paid' ELSE 'pending' END;
+            
+            SET @initial_ride_status = CASE 
+                WHEN @scheduled_start_time > @now THEN 'scheduled' 
+                ELSE 'to_origin' 
+            END;
  
             INSERT INTO taxi.rides
                 (passenger_id, driver_id, vehicle_id, origin_latitude,
                 origin_longitude, destination_latitude, destination_longitude,
                 estimated_distance, calculated_price, allocated_discount,
-                service_type, requested_at, accepted_at, ride_status)
-
+                service_type, requested_at, accepted_at, ride_status,
+                ride_payment_status, scheduled_start_time)
             VALUES 
-            (@passenger_id, @driver_id, @vehicle_id, @origin_lat,
-            @origin_lng, @dest_lat, @dest_lng, @distance_km, @price,
-            0, @service_type, @requested_at, @now, 'to_origin');
+                (@passenger_id, @driver_id, @vehicle_id, @origin_lat,
+                @origin_lng, @dest_lat, @dest_lng, @distance_km, @price,
+                0, @service_type, @requested_at, @now, @initial_ride_status,
+                @initial_payment_status, @scheduled_start_time);
  
             SET @new_ride_id = SCOPE_IDENTITY();
  
             UPDATE taxi.ride_offer_candidates 
             SET response_status = 'timeout',
-            responded_at = GETDATE() WHERE offer_id = @offer_id 
-            AND driver_id <> @driver_id 
-            AND response_status = 'pending';
+                responded_at = GETDATE() 
+            WHERE offer_id = @offer_id 
+                AND driver_id <> @driver_id 
+                AND response_status = 'pending';
     
             UPDATE taxi.drivers 
             SET driver_status = 'busy' 
@@ -395,19 +419,94 @@ BEGIN
             ROLLBACK TRANSACTION;
             ;THROW;
         END
-
     END CATCH
 END
 GO
 
-CREATE PROCEDURE taxi.sp_update_ride_status
+CREATE OR ALTER PROCEDURE taxi.sp_pay_for_ride
+    @ride_id INT,
+    @payment_method VARCHAR(15) = 'wallet'
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @passenger_id INT;
+    DECLARE @final_price DECIMAL(10,2);
+    DECLARE @discount DECIMAL(10,2);
+    DECLARE @payment_status VARCHAR(20);
+
+    SELECT
+        @passenger_id = passenger_id,
+        @final_price = calculated_price,
+        @discount = allocated_discount,
+        @payment_status = ride_payment_status
+    FROM taxi.rides
+    WHERE ride_id = @ride_id;
+
+    IF @passenger_id IS NULL
+    BEGIN
+        RAISERROR('Ride not found.', 16, 1);
+        RETURN;
+    END
+
+    IF @payment_status = 'paid'
+    BEGIN
+        RAISERROR('Ride is already paid.', 16, 1);
+        RETURN;
+    END
+
+    DECLARE @net_amount DECIMAL(10,2) = @final_price - ISNULL(@discount, 0);
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        DECLARE @transaction_id INT;
+
+        INSERT INTO core.transactions
+            (user_id, transaction_type, transaction_status, amount, payment_method)
+        VALUES
+            (@passenger_id, 'ride_payment', 'completed', @net_amount, @payment_method);
+
+        SET @transaction_id = SCOPE_IDENTITY();
+
+        INSERT INTO taxi.ride_payments
+            (ride_id, ride_payment_transaction_id)
+        VALUES
+            (@ride_id, @transaction_id);
+
+        IF @payment_method = 'wallet'
+        BEGIN
+            UPDATE core.user_wallets
+            SET balance = balance - @net_amount
+            WHERE user_id = @passenger_id;
+        END
+
+        UPDATE taxi.rides
+        SET ride_payment_status = 'paid'
+        WHERE ride_id = @ride_id;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+            ;THROW;
+        END
+    END CATCH
+END
+GO
+
+CREATE OR ALTER PROCEDURE taxi.sp_update_ride_status
     @ride_id INT,
     @new_status VARCHAR(20),
     @cancel_reason VARCHAR(50) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     DECLARE @current_status VARCHAR(20);
+    
     SELECT @current_status = ride_status
     FROM taxi.rides 
     WHERE ride_id = @ride_id;
@@ -424,26 +523,43 @@ BEGIN
         RETURN;
     END
 
+    IF @new_status = 'to_origin' AND @current_status <> 'scheduled'
+    BEGIN 
+        RAISERROR('Invalid status transition to to_origin.', 16, 1); 
+        RETURN; 
+    END
+    
     IF @new_status = 'to_destination' AND @current_status <> 'to_origin'
-    BEGIN RAISERROR('Invalid status transition to to_destination.', 16, 1); RETURN; END
+    BEGIN 
+        RAISERROR('Invalid status transition to to_destination.', 16, 1); 
+        RETURN; 
+    END
     
     IF @new_status = 'completed' AND @current_status <> 'to_destination'
-        BEGIN RAISERROR('Invalid status transition to completed.', 16, 1); RETURN; END
+    BEGIN 
+        RAISERROR('Invalid status transition to completed.', 16, 1); 
+        RETURN; 
+    END
 
-    IF @new_status = 'to_destination'
+    IF @new_status = 'to_origin'
+    BEGIN
+        UPDATE taxi.rides 
+        SET ride_status = 'to_origin'
+        WHERE ride_id = @ride_id;
+    END
+    ELSE IF @new_status = 'to_destination'
     BEGIN
         UPDATE taxi.rides 
         SET ride_status = 'to_destination',
             started_at = GETDATE()
         WHERE ride_id = @ride_id;
     END
-    
     ELSE IF @new_status = 'completed'
     BEGIN
         UPDATE taxi.rides 
         SET ride_status = 'completed',
             completed_at = GETDATE()
-            WHERE ride_id = @ride_id;
+        WHERE ride_id = @ride_id;
     END
     ELSE IF @new_status = 'cancelled'
     BEGIN
@@ -456,7 +572,16 @@ BEGIN
 END
 GO
 
-CREATE PROCEDURE taxi.sp_start_ride_to_destination
+CREATE OR ALTER PROCEDURE taxi.sp_start_ride_to_origin
+    @ride_id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC taxi.sp_update_ride_status @ride_id, 'to_origin';
+END
+GO
+
+CREATE OR ALTER PROCEDURE taxi.sp_start_ride_to_destination
     @ride_id INT
 AS
 BEGIN
@@ -465,31 +590,44 @@ BEGIN
 END
 GO
 
-CREATE PROCEDURE taxi.sp_complete_ride
+CREATE OR ALTER PROCEDURE taxi.sp_complete_ride
     @ride_id INT,
     @payment_method VARCHAR(15) = 'wallet'
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     DECLARE @passenger_id INT;
     DECLARE @driver_id INT;
     DECLARE @final_price DECIMAL(10,2);
     DECLARE @discount DECIMAL(10,2);
+    DECLARE @payment_status VARCHAR(20);
  
-    SELECT @passenger_id = passenger_id, @driver_id = driver_id,
-        @final_price = calculated_price, @discount = allocated_discount
-    FROM taxi.rides WHERE ride_id = @ride_id;
+    SELECT 
+        @passenger_id = passenger_id, 
+        @driver_id = driver_id,
+        @final_price = calculated_price, 
+        @discount = allocated_discount,
+        @payment_status = ride_payment_status
+    FROM taxi.rides 
+    WHERE ride_id = @ride_id;
  
-    IF @passenger_id IS NULL BEGIN RAISERROR('Ride not found.', 16, 1); RETURN; END
+    IF @passenger_id IS NULL 
+    BEGIN 
+        RAISERROR('Ride not found.', 16, 1); 
+        RETURN; 
+    END
  
     DECLARE @net_amount DECIMAL(10,2) = @final_price - ISNULL(@discount, 0);
-
-    DECLARE @driver_share DECIMAL(5,2), @app_share DECIMAL(5,2);
+    DECLARE @driver_share DECIMAL(5,2);
+    DECLARE @app_share DECIMAL(5,2);
  
-    SELECT @driver_share = driver_share, @app_share = app_share
+    SELECT 
+        @driver_share = driver_share, 
+        @app_share = app_share
     FROM core.fn_get_active_commission_rate('taxi', GETDATE());
  
-    IF @driver_share IS NULL 
+    IF @driver_share IS NULL OR @app_share IS NULL
     BEGIN
         RAISERROR('No active commission rate found for taxi.', 16, 1);
         RETURN;
@@ -497,58 +635,61 @@ BEGIN
  
     BEGIN TRY
         BEGIN TRANSACTION;
+
+
+        IF @payment_status = 'pending'
+        BEGIN
+            EXEC taxi.sp_pay_for_ride @ride_id, @payment_method;
+        END
  
         EXEC taxi.sp_update_ride_status @ride_id, 'completed';
  
-        DECLARE @transaction_id INT;
-        INSERT INTO core.transactions 
-            (user_id, transaction_type, transaction_status, amount, payment_method)
-        VALUES 
-            (@passenger_id, 'ride_payment', 'completed', @net_amount, @payment_method);
- 
-        SET @transaction_id = SCOPE_IDENTITY();
-        INSERT INTO taxi.ride_payments
-            (ride_id, ride_payment_transaction_id)
-        VALUES 
-            (@ride_id, @transaction_id);
- 
-        IF @payment_method = 'wallet'
-        BEGIN
-            UPDATE core.user_wallets 
-            SET balance = balance - @net_amount 
-            WHERE user_id = @passenger_id;
-        END
- 
+
         UPDATE taxi.driver_wallets 
         SET balance = balance + (@net_amount * @driver_share / 100)
         WHERE driver_id = @driver_id;
+
+
+        UPDATE core.app_wallets
+        SET total_balance = total_balance + (@net_amount * @app_share / 100);
         
+    
         UPDATE taxi.drivers 
         SET driver_status = 'available'
         WHERE driver_id = @driver_id;
- 
-
         
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-        ;THROW;
+        IF @@TRANCOUNT > 0 
+        BEGIN
+            ROLLBACK TRANSACTION;
+            ;THROW;
+        END
     END CATCH
 END
+
 GO
 
-
-
-CREATE PROCEDURE taxi.sp_cancel_ride
+CREATE OR ALTER PROCEDURE taxi.sp_cancel_ride
     @ride_id INT,
     @cancel_reason VARCHAR(50)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     DECLARE @driver_id INT;
+    DECLARE @passenger_id INT;
+    DECLARE @payment_status VARCHAR(20);
+    DECLARE @final_price DECIMAL(10,2);
+    DECLARE @discount DECIMAL(10,2);
 
-    SELECT @driver_id = driver_id 
+    SELECT 
+        @driver_id = driver_id,
+        @passenger_id = passenger_id,
+        @payment_status = ride_payment_status,
+        @final_price = calculated_price,
+        @discount = allocated_discount
     FROM taxi.rides 
     WHERE ride_id = @ride_id;
 
@@ -556,12 +697,30 @@ BEGIN
         BEGIN TRANSACTION;
         
         EXEC taxi.sp_update_ride_status @ride_id, 'cancelled', @cancel_reason;
+        
         UPDATE taxi.drivers 
         SET driver_status = 'available' 
         WHERE driver_id = @driver_id;
         
+        IF @payment_status = 'paid'
+        BEGIN
+            DECLARE @net_amount DECIMAL(10,2) = @final_price - ISNULL(@discount, 0);
+            
+            INSERT INTO core.transactions 
+                (user_id, transaction_type, transaction_status, amount, payment_method)
+            VALUES 
+                (@passenger_id, 'refund', 'completed', @net_amount, 'wallet');
+                
+            UPDATE core.user_wallets 
+            SET balance = balance + @net_amount 
+            WHERE user_id = @passenger_id;
+            
+            UPDATE taxi.rides
+            SET ride_payment_status = 'refunded'
+            WHERE ride_id = @ride_id;
+        END
+        
         COMMIT TRANSACTION;
-
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 
@@ -573,11 +732,11 @@ BEGIN
 END
 GO
 
-CREATE PROCEDURE taxi.sp_rate_ride
+CREATE OR ALTER PROCEDURE taxi.sp_rate_ride
     @ride_id INT,
     @rater_role VARCHAR(15), 
     @rating INT,
-    @comment TEXT = NULL
+    @comment NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -591,6 +750,12 @@ BEGIN
     SELECT @status = ride_status 
     FROM taxi.rides 
     WHERE ride_id = @ride_id;
+    
+    IF @status IS NULL 
+    BEGIN 
+        RAISERROR('Ride not found.', 16, 1); 
+        RETURN;
+    END
     
     IF @status <> 'completed' 
     BEGIN 
@@ -641,9 +806,65 @@ BEGIN
 END
 GO
 
--- views
 
-CREATE VIEW taxi.vw_available_drivers AS
+-- 4. Read APIs for Backend
+
+
+CREATE OR ALTER PROCEDURE taxi.sp_get_passenger_active_ride
+    @passenger_id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT 
+        ride_id, driver_id, vehicle_id, service_type, 
+        origin_latitude, origin_longitude, destination_latitude, destination_longitude, 
+        ride_status, ride_payment_status, calculated_price
+    FROM taxi.rides
+    WHERE passenger_id = @passenger_id 
+      AND ride_status NOT IN ('completed', 'cancelled');
+END
+GO
+
+CREATE OR ALTER PROCEDURE taxi.sp_get_driver_new_offers
+    @driver_id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT 
+        o.ride_offer_id, o.origin_latitude, o.origin_longitude, 
+        o.destination_latitude, o.destination_longitude, 
+        o.calculated_price, o.is_prepaid, o.expires_at
+    FROM taxi.ride_offer_candidates c
+    JOIN taxi.ride_offers o ON c.offer_id = o.ride_offer_id
+    WHERE c.driver_id = @driver_id 
+      AND c.response_status = 'pending'
+      AND o.expires_at > GETDATE();
+END
+GO
+
+CREATE OR ALTER PROCEDURE taxi.sp_get_passenger_ride_history
+    @passenger_id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT 
+        ride_id, service_type, ride_status, ride_payment_status, 
+        calculated_price, requested_at, completed_at
+    FROM taxi.rides
+    WHERE passenger_id = @passenger_id 
+      AND ride_status IN ('completed', 'cancelled')
+    ORDER BY requested_at DESC;
+END
+GO
+
+
+-- 5. Views
+
+
+CREATE OR ALTER VIEW taxi.vw_available_drivers AS
 SELECT 
     d.driver_id,
     d.user_id,
@@ -663,7 +884,7 @@ JOIN taxi.vehicles v
 WHERE d.driver_status = 'available';
 GO
  
-CREATE VIEW taxi.vw_active_ride_offers AS
+CREATE OR ALTER VIEW taxi.vw_active_ride_offers AS
 SELECT 
     ro.ride_offer_id,
     ro.passenger_id,
@@ -683,7 +904,7 @@ GROUP BY ro.ride_offer_id, ro.passenger_id,
     ro.requested_at, ro.expires_at;
 GO
  
-CREATE VIEW taxi.vw_ongoing_rides AS
+CREATE OR ALTER VIEW taxi.vw_ongoing_rides AS
 SELECT 
     r.ride_id,
     r.passenger_id,
@@ -698,7 +919,7 @@ FROM taxi.rides r
 WHERE r.ride_status IN ('to_origin','to_destination');
 GO
  
-CREATE VIEW taxi.vw_driver_earnings_summary AS
+CREATE OR ALTER VIEW taxi.vw_driver_earnings_summary AS
 SELECT 
     d.driver_id,
     d.user_id,
@@ -710,10 +931,9 @@ JOIN taxi.driver_wallets dw ON dw.driver_id = d.driver_id
 LEFT JOIN taxi.rides r 
     ON r.driver_id = d.driver_id AND r.ride_status = 'completed'
 GROUP BY d.driver_id, d.user_id, dw.balance;
-
 GO
 
-CREATE VIEW taxi.vw_driver_ranking AS
+CREATE OR ALTER VIEW taxi.vw_driver_ranking AS
 SELECT 
     driver_id,
     user_id,
@@ -725,8 +945,7 @@ SELECT
 FROM taxi.drivers;
 GO
 
-
-CREATE VIEW taxi.vw_passenger_ranking AS
+CREATE OR ALTER VIEW taxi.vw_passenger_ranking AS
 SELECT 
     user_id,
     average_score,
@@ -736,10 +955,11 @@ SELECT
 FROM taxi.passenger_stats;
 GO
 
--- triggers
+
+-- 6. Triggers
 
 
-CREATE TRIGGER taxi.trg_vehicles_enforce_single_active
+CREATE OR ALTER TRIGGER taxi.trg_vehicles_enforce_single_active
 ON taxi.vehicles
 AFTER INSERT, UPDATE
 AS
@@ -758,8 +978,7 @@ BEGIN
 END
 GO
 
-
-CREATE TRIGGER taxi.trg_drivers_after_insert
+CREATE OR ALTER TRIGGER taxi.trg_drivers_after_insert
 ON taxi.drivers
 AFTER INSERT
 AS
@@ -776,7 +995,6 @@ BEGIN
     
     WHILE @@FETCH_STATUS = 0
     BEGIN
-
         DECLARE @new_json NVARCHAR(MAX) = 
             (SELECT * FROM inserted WHERE driver_id = @driver_id FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
         
@@ -786,7 +1004,6 @@ BEGIN
             @driver_id = @driver_id;
 
         FETCH NEXT FROM cur_inserted INTO @driver_id, @user_id;
-    
     END
     
     CLOSE cur_inserted; 
@@ -794,8 +1011,7 @@ BEGIN
 END
 GO
 
-
-CREATE TRIGGER taxi.trg_vehicles_after_insert
+CREATE OR ALTER TRIGGER taxi.trg_vehicles_after_insert
 ON taxi.vehicles
 AFTER INSERT
 AS
@@ -819,7 +1035,6 @@ BEGIN
             @description = 'New vehicle registered', @driver_id = @owner_id;
         
         FETCH NEXT FROM cur_inserted INTO @vehicle_id, @owner_id;
-    
     END
     
     CLOSE cur_inserted;
@@ -827,7 +1042,7 @@ BEGIN
 END
 GO
 
-CREATE TRIGGER taxi.trg_rides_after_insert
+CREATE OR ALTER TRIGGER taxi.trg_rides_after_insert
 ON taxi.rides
 AFTER INSERT
 AS
@@ -862,7 +1077,6 @@ BEGIN
             @description = 'New ride created', @ride_id = @ride_id;
         
         FETCH NEXT FROM cur_inserted INTO @ride_id, @passenger_id;
-    
     END
     
     CLOSE cur_inserted;
@@ -870,7 +1084,7 @@ BEGIN
 END
 GO
 
-CREATE TRIGGER taxi.trg_rides_log_status_change
+CREATE OR ALTER TRIGGER taxi.trg_rides_log_status_change
 ON taxi.rides
 AFTER UPDATE
 AS
@@ -890,7 +1104,6 @@ BEGIN
     
     WHILE @@FETCH_STATUS = 0
     BEGIN
-
         DECLARE @old_json NVARCHAR(MAX) = 
             (SELECT * FROM deleted WHERE ride_id = @ride_id FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
         DECLARE @new_json NVARCHAR(MAX) = 
@@ -901,17 +1114,14 @@ BEGIN
             @description = 'Ride status changed', @ride_id = @ride_id;
         
         FETCH NEXT FROM cur_status INTO @ride_id;
-    
     END
     
     CLOSE cur_status;
     DEALLOCATE cur_status;
 END
-
 GO
 
-
-CREATE TRIGGER taxi.trg_rides_log_rating
+CREATE OR ALTER TRIGGER taxi.trg_rides_log_rating
 ON taxi.rides
 AFTER UPDATE
 AS
@@ -941,7 +1151,6 @@ BEGIN
                 @description = 'Passenger rated the driver', @ride_id = @ride_id;
             
             FETCH NEXT FROM cur_p_rating INTO @ride_id;
-        
         END
         
         CLOSE cur_p_rating;
@@ -969,7 +1178,6 @@ BEGIN
                 @description = 'Driver rated the passenger', @ride_id = @ride_id;
             
             FETCH NEXT FROM cur_d_rating INTO @ride_id;
-        
         END
         
         CLOSE cur_d_rating;
@@ -978,8 +1186,7 @@ BEGIN
 END
 GO
 
-
-CREATE TRIGGER taxi.trg_rides_update_metrics
+CREATE OR ALTER TRIGGER taxi.trg_rides_update_metrics
 ON taxi.rides
 AFTER UPDATE
 AS
@@ -1013,7 +1220,6 @@ BEGIN
                 ON de.ride_id = i.ride_id
             WHERE i.driver_rating_to_passenger IS NOT NULL 
                 AND de.driver_rating_to_passenger IS NULL
-
         ) AS src
         ON target.user_id = src.passenger_id
         WHEN MATCHED THEN
@@ -1026,4 +1232,16 @@ BEGIN
             VALUES (src.passenger_id, src.driver_rating_to_passenger, 1, 5);
     END
 END
+GO
+
+
+-- 7. Database Roles & Security Permissions
+
+GRANT SELECT ON taxi.vw_available_drivers TO readonly_analyst;
+GRANT SELECT ON taxi.vw_active_ride_offers TO readonly_analyst;
+GRANT SELECT ON taxi.vw_ongoing_rides TO readonly_analyst;
+GRANT SELECT ON taxi.vw_driver_earnings_summary TO readonly_analyst;
+GRANT SELECT ON taxi.vw_driver_ranking TO readonly_analyst;
+GRANT SELECT ON taxi.vw_passenger_ranking TO readonly_analyst;
+
 GO

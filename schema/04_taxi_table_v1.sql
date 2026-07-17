@@ -1,13 +1,14 @@
-USE mini_snapp
-
+USE mini_snapp;
 GO
 
+
+-- 1. Taxi Base Tables (Unified & Patched)
 
 CREATE TABLE taxi.drivers(
     driver_id INT IDENTITY(1,1) NOT NULL,
     user_id INT NOT NULL,
     national_id VARCHAR(15) NOT NULL,
-    date_of_birth DATE NOT NULL , -- user for cal age
+    date_of_birth DATE NOT NULL ,
     driver_status VARCHAR(20) NOT NULL DEFAULT 'offline',
     gender VARCHAR(15),
     average_rating DECIMAL(3,2) DEFAULT 0.00,
@@ -32,7 +33,6 @@ CREATE TABLE taxi.drivers(
     CONSTRAINT chk_drivers_gender
         CHECK (gender IN ('male','female'))
 );
-
 GO
 
 CREATE TABLE taxi.vehicles(
@@ -55,11 +55,10 @@ CREATE TABLE taxi.vehicles(
 
     CONSTRAINT chk_vehicles_vehicle_type
         CHECK (vehicle_type IN ('economy','premium','suv','motorcycle','pickup','truck'))
-)
+);
 GO
 
--- Defines which (vehicle_type, service_type) combinations are valid.
--- e.g. motorcycle can serve both passenger & cargo, truck only cargo, suv only passenger.
+
 CREATE TABLE taxi.vehicle_type_services(
     vehicle_type VARCHAR(20) NOT NULL,
     service_type VARCHAR(20) NOT NULL,
@@ -73,7 +72,6 @@ CREATE TABLE taxi.vehicle_type_services(
     CONSTRAINT chk_vehicle_type_services_service_type
         CHECK (service_type IN ('passenger','cargo'))
 );
-
 GO
 
 CREATE TABLE taxi.driver_wallets(
@@ -90,7 +88,6 @@ CREATE TABLE taxi.driver_wallets(
     CONSTRAINT uq_driver_wallets_driver_id
         UNIQUE (driver_id)
 );
-
 GO
 
 CREATE TABLE taxi.driver_locations(
@@ -104,8 +101,7 @@ CREATE TABLE taxi.driver_locations(
 
     CONSTRAINT fk_driver_locations_driver_id
         FOREIGN KEY (driver_id) REFERENCES taxi.drivers(driver_id)
-)
-
+);
 GO
 
 CREATE TABLE taxi.driver_secondary_phones(
@@ -126,7 +122,6 @@ CREATE TABLE taxi.driver_secondary_phones(
     CONSTRAINT uq_driver_secondary_phones__phone_number
         UNIQUE (phone_number)
 );
-
 GO
 
 CREATE TABLE taxi.rides(
@@ -150,13 +145,17 @@ CREATE TABLE taxi.rides(
     allocated_discount DECIMAL(10,2) NOT NULL DEFAULT 0,
     driver_rating_to_passenger INT ,
     passenger_rating_to_driver INT ,
-    comment TEXT,
-    service_type VARCHAR(20) NOT NULL, -- passenger / cargo, ride ba in vehicle barash chikar mishe
+    comment NVARCHAR(MAX), 
+    service_type VARCHAR(20) NOT NULL, 
+    
+    ride_status VARCHAR(20) NOT NULL, 
+    ride_payment_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    
     requested_at DATETIME,
+    scheduled_start_time DATETIME NULL,
     accepted_at DATETIME,
     started_at DATETIME,
     completed_at DATETIME,
-    ride_status VARCHAR(20) NOT NULL, -- درحال حرکت به مبدا ، درحال حرکت به مقصد ، تمام شده ، کنسل شده
     cancelled_at DATETIME,
     cancel_reason VARCHAR(50),
 
@@ -175,8 +174,11 @@ CREATE TABLE taxi.rides(
     CONSTRAINT chk_rides_service_type
         CHECK (service_type IN ('passenger','cargo')),
 
-    CONSTRAINT chk_rides_status
-        CHECK (ride_status IN ('to_origin','to_destination','completed','cancelled')),
+    CONSTRAINT chk_rides_status 
+        CHECK (ride_status IN ('scheduled', 'to_origin', 'to_destination', 'completed', 'cancelled')),
+
+    CONSTRAINT chk_rides_ride_payment_status
+        CHECK (ride_payment_status IN ('pending', 'paid', 'refunded')),
 
     CONSTRAINT chk_rides_driver_rating
         CHECK (driver_rating_to_passenger IS NULL OR driver_rating_to_passenger BETWEEN 1 AND 5),
@@ -190,9 +192,7 @@ CREATE TABLE taxi.rides(
             (started_at IS NULL OR accepted_at IS NULL OR started_at >= accepted_at) AND
             (completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at)
         )
-
 );
-
 GO
 
 CREATE TABLE taxi.ride_payments(
@@ -211,54 +211,54 @@ CREATE TABLE taxi.ride_payments(
     CONSTRAINT uq_ride_payments_transaction_id
         UNIQUE (ride_payment_transaction_id)
 );
-
 GO
 
 CREATE TABLE taxi.passenger_stats(
     user_id INT NOT NULL ,
     average_score DECIMAL(3,2) DEFAULT 0.00,
     score_count INT DEFAULT 0,
-    activity_score INT DEFAULT 0, -- rank ba activity_score , average_score sakhte mishe
+    activity_score INT DEFAULT 0, 
 
     CONSTRAINT pk_passenger_stats_user_id
         PRIMARY KEY (user_id),
 
     CONSTRAINT fk_passenger_stats_user_id
         FOREIGN KEY (user_id) REFERENCES core.users(user_id)
-)
-
+);
 GO
 
 CREATE TABLE taxi.taxi_logs(
-        taxi_log_id INT IDENTITY(1,1) NOT NULL,
-        actor_id INT ,
-        operation_type VARCHAR(10) NOT NULL,
-        target_table VARCHAR(50) NOT NULL,
-        target_id VARCHAR(50) NOT NULL,
-        old_value NVARCHAR(MAX) ,
-        new_value NVARCHAR(MAX) ,
-        create_at DATETIME DEFAULT GETDATE(),
-        [description] TEXT ,
-        driver_id INT ,
-        ride_id INT ,
+    taxi_log_id INT IDENTITY(1,1) NOT NULL,
+    actor_id INT ,
+    operation_type VARCHAR(10) NOT NULL,
+    schema_name VARCHAR(10) NOT NULL DEFAULT 'taxi',
+    target_table VARCHAR(50) NOT NULL,
+    target_id VARCHAR(50) NOT NULL,
+    old_value NVARCHAR(MAX) ,
+    new_value NVARCHAR(MAX) ,
+    created_at DATETIME DEFAULT GETDATE(), 
+    [description] NVARCHAR(MAX) , 
+    driver_id INT ,
+    ride_id INT ,
 
-        CONSTRAINT pk_taxi_logs
-            PRIMARY KEY (taxi_log_id),
+    CONSTRAINT pk_taxi_logs
+        PRIMARY KEY (taxi_log_id),
 
-        CONSTRAINT fk_taxi_logs_actor_id
-            FOREIGN KEY (actor_id) REFERENCES core.users(user_id),
+    CONSTRAINT fk_taxi_logs_actor_id
+        FOREIGN KEY (actor_id) REFERENCES core.users(user_id),
 
-        CONSTRAINT chk_taxi_logs_operation_type
-            CHECK (operation_type IN ('insert','update','delete')),
+    CONSTRAINT chk_taxi_logs_operation_type
+        CHECK (operation_type IN ('insert','update','delete')),
 
-        CONSTRAINT fk_taxi_logs_driver_id
-            FOREIGN KEY (driver_id) REFERENCES taxi.drivers(driver_id),
+    CONSTRAINT fk_taxi_logs_driver_id
+        FOREIGN KEY (driver_id) REFERENCES taxi.drivers(driver_id),
 
-        CONSTRAINT fk_taxi_logs_ride_id
-            FOREIGN KEY (ride_id) REFERENCES taxi.rides(ride_id)
-
+    CONSTRAINT fk_taxi_logs_ride_id
+        FOREIGN KEY (ride_id) REFERENCES taxi.rides(ride_id),
+    
+    CONSTRAINT chk_taxi_logs_schema_name 
+        CHECK (schema_name = 'taxi')
 );
-
 GO
 
 CREATE TABLE taxi.pricing_parameters(
@@ -279,8 +279,7 @@ CREATE TABLE taxi.pricing_parameters(
 
     CONSTRAINT chk_pricing_parameters_time_check
         CHECK (effective_to IS NULL OR effective_from < effective_to)
-)
-
+);
 GO
 
 CREATE TABLE taxi.ride_offers(
@@ -293,6 +292,10 @@ CREATE TABLE taxi.ride_offers(
     calculated_price DECIMAL(10 , 2) NOT NULL ,
     vehicle_type VARCHAR(20) NOT NULL ,
     service_type VARCHAR(20) NOT NULL ,
+    
+    is_prepaid BIT NOT NULL DEFAULT 0, 
+    scheduled_start_time DATETIME NULL, 
+    
     requested_at DATETIME DEFAULT GETDATE(),
     expires_at DATETIME NOT NULL,
 
@@ -308,7 +311,6 @@ CREATE TABLE taxi.ride_offers(
     CONSTRAINT chk_ride_offers_time_check
         CHECK (requested_at < expires_at)
 );
-
 GO
 
 CREATE TABLE taxi.ride_offer_candidates(
@@ -317,7 +319,7 @@ CREATE TABLE taxi.ride_offer_candidates(
     driver_id INT NOT NULL ,
     notified_at DATETIME DEFAULT GETDATE(),
     responded_at DATETIME ,
-    response_status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending , accepted , rejected , timeout
+    response_status VARCHAR(20) NOT NULL DEFAULT 'pending',
 
     CONSTRAINT pk_ride_offer_candidates_ride_offer_candidate_id
         PRIMARY KEY(ride_offer_candidate_id),
@@ -334,5 +336,20 @@ CREATE TABLE taxi.ride_offer_candidates(
     CONSTRAINT chk_ride_offer_candidates_response_status
         CHECK (response_status IN ('pending','accepted','rejected','timeout'))
 );
+GO
 
+
+-- 2. Performance Indexes
+
+
+CREATE NONCLUSTERED INDEX IX_rides_passenger_id ON taxi.rides(passenger_id);
+GO
+
+CREATE NONCLUSTERED INDEX IX_rides_driver_id ON taxi.rides(driver_id);
+GO
+
+CREATE NONCLUSTERED INDEX IX_ride_offers_passenger_id ON taxi.ride_offers(passenger_id);
+GO
+
+CREATE NONCLUSTERED INDEX IX_ride_offer_candidates_driver_id ON taxi.ride_offer_candidates(driver_id);
 GO

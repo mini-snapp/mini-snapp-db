@@ -1,0 +1,8 @@
+role_name,role_description,hierarchy_level
+customer,Standard platform user,1
+driver,Registered fleet driver,2
+restaurant_staff,Branch operational staff,2
+branch_owner,Manager of a specific branch,3
+brand_owner,Owner of the parent brand,3
+admin,System administrator,5
+super_admin,Top-level platform manager,10

@@ -1,0 +1,6 @@
+user_id,transaction_type,transaction_status,amount,payment_method,coupon_id,created_at
+1,wallet_charge,completed,50.00,card,NULL,2026-07-15 00:00:00
+1,ride_payment,completed,12.50,wallet,NULL,2026-07-16 00:00:00
+2,payout,pending,85.00,card,NULL,2026-07-17 00:00:00
+4,wallet_charge,failed,20.00,card,NULL,2026-07-17 00:00:00
+1,order_payment,completed,24.00,wallet,1,2026-07-17 00:00:00
