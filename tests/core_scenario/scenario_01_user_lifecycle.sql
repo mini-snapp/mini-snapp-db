@@ -2,7 +2,7 @@ USE mini_snapp;
 GO
 
 
-PRINT '--- STEP 1: Register New User ---';
+PRINT '--- STEP 1: Register New User --';
 
 DECLARE @customer_role_id INT = (SELECT role_id FROM core.roles WHERE role_name = 'customer');
 DECLARE @new_user_id INT;
@@ -39,16 +39,15 @@ EXEC core.sp_check_user_exists
 GO
 
 
-PRINT '--- STEP 3: Verify Login (Success & Failure) ---';
+PRINT '--- STEP 3: Verify Login ---';
 
 
-SELECT 'Login Attempt 1 (Correct Password)' AS Scenario;
 EXEC core.sp_verify_login 
     @username = 'demo_user', 
     @input_password_hash = 'my_secure_hash_123';
 
 
-SELECT 'Login Attempt 2 (Wrong Password)' AS Scenario;
+
 EXEC core.sp_verify_login 
     @username = 'demo_user', 
     @input_password_hash = 'wrong_password_!!!';
@@ -72,7 +71,7 @@ WHERE username = 'demo_user';
 SELECT username, is_blocked, deleted_at FROM core.users WHERE username = 'demo_user';
 
 
-SELECT 'Login Attempt 3 (User is Blocked)' AS Scenario;
+
 EXEC core.sp_verify_login 
     @username = 'demo_user', 
     @input_password_hash = 'my_secure_hash_123';
@@ -89,7 +88,7 @@ WHERE username = 'demo_user';
 SELECT username, is_blocked, deleted_at FROM core.users WHERE username = 'demo_user';
 
 
-SELECT 'Login Attempt 4 (User is Deleted)' AS Scenario;
+
 EXEC core.sp_verify_login 
     @username = 'demo_user', 
     @input_password_hash = 'my_secure_hash_123';
