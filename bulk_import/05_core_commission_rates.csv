@@ -1,0 +1,4 @@
+service_type,driver_share,restaurant_share,app_share,effective_from,effective_to
+food,15.00,75.00,10.00,2026-01-17 00:00:00,2026-06-17 00:00:00
+food,12.50,77.50,10.00,2026-06-17 00:00:00,NULL
+taxi,80.00,NULL,20.00,2026-05-17 00:00:00,NULL

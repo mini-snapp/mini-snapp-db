@@ -1,0 +1,5 @@
+user_id,address_name,province,city,street,description_text,latitude,longitude
+1,Campus Lab,State,City,University Blvd,"Computer Engineering Department, Main Lab",35.7001,51.3890
+2,Home,State,City,Oak Street 12,Ring the second bell,35.7100,51.4000
+4,TA Office,State,City,University Blvd,Room 404,35.7005,51.3895
+3,Dormitory,State,City,Student Ave,Block B,35.7050,51.3950

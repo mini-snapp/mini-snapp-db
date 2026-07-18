@@ -1,0 +1,4 @@
+vehicle_type,service_type,base_fare,price_per_km,price_per_minute
+economy,passenger,10.00,2.00,0.50
+premium,passenger,25.00,4.00,1.00
+motorcycle,cargo,5.00,1.50,0.20

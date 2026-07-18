@@ -1,0 +1,7 @@
+username,password_hash,first_name,last_name,registration_phone,email,role_id,is_blocked
+avesta,$2b$12$dummyhash1,Avesta,NULL,5550100001,avesta@local.dev,1,0
+arash,$2b$12$dummyhash2,Arash,NULL,5550100002,arash@local.dev,2,0
+kian_ce,$2b$12$dummyhash3,Kian,Rad,5550100003,kian.ce@edu.dev,1,0
+sara_ta,$2b$12$dummyhash4,Sara,Ahmadi,5550100004,sara.ta@edu.dev,1,1
+neda_db,$2b$12$dummyhash5,Neda,Karimi,5550100005,neda.db@local.dev,6,0
+driver_reza,hash,NULL,NULL,09201112233,NULL,2,0

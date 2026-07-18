@@ -1,0 +1,4 @@
+reporter_id,target_type,target_id,title,complaint_description,complaint_status,assigned_admin_id,created_at
+1,driver,2,Late arrival,The driver arrived 15 minutes late to the pickup point.,in_review,1,2026-07-16 00:00:00
+1,branch,105,Cold food,"The delivery was quick but the meal was entirely cold.",open,NULL,2026-07-17 00:00:00
+3,user,1,Rude passenger,Passenger slammed the door.,resolved,1,2026-07-12 00:00:00
