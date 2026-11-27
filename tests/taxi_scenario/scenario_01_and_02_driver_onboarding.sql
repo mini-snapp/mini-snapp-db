@@ -29,9 +29,9 @@ WHERE d.driver_id = @new_driver_id;
 PRINT '--- TAXI SCENARIO 2 | STEP 1: Register Two Vehicles ---';
 DECLARE @v1 INT, @v2 INT;
 
-EXEC taxi.sp_register_vehicle @owner_id = @new_driver_id, @vehicle_type = 'economy', @license_plate = '11-A-111', @color = 'White', @model_name = 'Pride', @new_vehicle_id = @v1 OUTPUT;
+EXEC taxi.sp_register_vehicle @owner_id = @new_driver_id, @vehicle_type = 'economy', @license_plate = '11-A-111', @color = 'White', @model_name = 'Peugeot 206', @new_vehicle_id = @v1 OUTPUT;
 
-EXEC taxi.sp_register_vehicle @owner_id = @new_driver_id, @vehicle_type = 'economy', @license_plate = '22-B-222', @color = 'Silver', @model_name = 'Tiba', @new_vehicle_id = @v2 OUTPUT;
+EXEC taxi.sp_register_vehicle @owner_id = @new_driver_id, @vehicle_type = 'economy', @license_plate = '22-B-222', @color = 'Silver', @model_name = 'Samand', @new_vehicle_id = @v2 OUTPUT;
 
 PRINT '--- TAXI SCENARIO 2 | STEP 2: Check Active Vehicles Trigger ---';
 

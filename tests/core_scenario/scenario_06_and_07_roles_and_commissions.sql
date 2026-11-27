@@ -6,13 +6,14 @@ PRINT '--- SCENARIO 6 | STEP 1: Check Permissions for Normal User ---';
 
 SELECT username, role_name, permission_name 
 FROM core.vw_user_roles_permissions 
-WHERE username = 'wallet_demo'; 
+WHERE username = CASE WHEN EXISTS (SELECT 1 FROM core.users WHERE username = 'wallet_demo') THEN 'wallet_demo' ELSE 'avesta' END;
 
 PRINT '--- SCENARIO 6 | STEP 2: Check Permissions for Admin User ---';
 
 SELECT username, role_name, permission_name 
 FROM core.vw_user_roles_permissions 
-WHERE username = 'future_admin' AND permission_name IS NOT NULL;
+WHERE username = CASE WHEN EXISTS (SELECT 1 FROM core.users WHERE username = 'future_admin') THEN 'future_admin' ELSE 'neda_db' END
+  AND permission_name IS NOT NULL;
 
 
 

@@ -1,17 +1,14 @@
-USE mini_snapp
+USE mini_snapp;
 GO
 
-CREATE SCHEMA core 
-
+CREATE SCHEMA core;
 GO
 
-CREATE SCHEMA food
-
+CREATE SCHEMA food;
 GO
 
-create schema taxi
-
+CREATE SCHEMA taxi;
 GO
 
-CREATE SCHEMA test
-
+CREATE SCHEMA test;
+GO

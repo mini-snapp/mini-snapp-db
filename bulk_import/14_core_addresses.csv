@@ -1,5 +1,5 @@
 user_id,address_name,province,city,street,description_text,latitude,longitude
-1,Campus Lab,State,City,University Blvd,"Computer Engineering Department, Main Lab",35.7001,51.3890
-2,Home,State,City,Oak Street 12,Ring the second bell,35.7100,51.4000
-4,TA Office,State,City,University Blvd,Room 404,35.7005,51.3895
-3,Dormitory,State,City,Student Ave,Block B,35.7050,51.3950
+1,Office,Tehran,Tehran,Valiasr Ave,"Main Engineering Office, Floor 3",35.70010000,51.38900000
+2,Home,Tehran,Tehran,Karimkhan St No. 12,Ring the second bell,35.71000000,51.40000000
+4,Work,Tehran,Tehran,Enghelab Ave,Suite 404,35.70050000,51.38950000
+3,Home,Tehran,Tehran,Keshavarz Blvd,Block B,35.70500000,51.39500000

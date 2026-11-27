@@ -1,0 +1,7 @@
+brand_id,rating,province,city,street,latitude,longitude,email,food_type,max_delivery_distance,is_active,rating_count
+1,4.6,Tehran,Tehran,"Valiasr St, No.120",35.7219,51.3347,branch1@burgerhouse.com,Fast Food,8.5,1,210
+2,4.4,Tehran,Tehran,"Shariati St, No.85",35.7441,51.4423,branch1@pizzapalace.com,Pizza,10,1,180
+3,4.8,Isfahan,Isfahan,"Chaharbagh Ave, No.25",32.6546,51.668,branch1@sushiexpress.com,Sushi,7,1,155
+4,4.3,Fars,Shiraz,"Zand Blvd, No.40",29.6167,52.5311,branch1@kebabking.com,Persian,9,1,260
+5,4.7,Khorasan Razavi,Mashhad,"Ahmadabad St, No.15",36.2972,59.6067,branch1@healthybites.com,Healthy,6.5,1,132
+6,4.2,East Azerbaijan,Tabriz,"Imam St, No.98",38.08,46.2919,branch1@chickenhub.com,Fried Chicken,8,1,175

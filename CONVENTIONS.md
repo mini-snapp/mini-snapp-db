@@ -1,48 +1,40 @@
-# Naming Conventions
-
-## Tables
-- Plural, lowercase, snake_case
-
-## Primary Keys
-- Format: table_name + _id
-
-## Foreign Keys
-- Same name as the referenced primary key
-
-## Boolean Columns
-- Prefix: is_ or has_
-
-## Object Prefixes
-- Views:             vw_
-- Functions:         fn_
-- Stored Procedures: sp_
-- Triggers:          trg_
-
-## Trigger Naming
-- Format: trg_ + table + event
-
-## Constraints
-- Format: type_table_column
+# Database Naming & Engineering Conventions
 
 ## Schemas
-- core:  shared or core infrastructure
-- food:  food ordering service
-- taxi:  taxi service
-- 
-## Data Types
+- `core`: Shared identity, RBAC, wallets, coupons, transactions, complaints, and audit logs.
+- `taxi`: Fleet management, driver locations, ride offers, dispatch state machine, and fare pricing.
+- `food`: Brands, restaurant branches, menus, carts, food order fulfillment, and branch wallets.
+- `test`: Automated SQL assertion framework and test results repository.
 
-- Money:        DECIMAL(10,2)
-- Percentage:   DECIMAL(5,2)
-- Latitude:     DECIMAL(10,8)
-- Longitude:    DECIMAL(11,8)
-- first_name, last_name         VARCHAR(50)
-- username                      VARCHAR(50)
-- email                         VARCHAR(100)
-- password (hashed)             VARCHAR(255)
-- phone (registration/business/secondary)  VARCHAR(15)
-- national_id                   VARCHAR(15)
-- license_plate                 VARCHAR(15)
-- address_name, city, province, street     VARCHAR(100)
-- code (coupon)                 VARCHAR(20)
-- status, type, role_name, operation_type  VARCHAR(20)
-- title (complaint)             VARCHAR(150)
+## Tables & Columns
+- **Table Names**: Plural, lowercase, `snake_case` (e.g., `core.user_wallets`, `taxi.ride_offers`).
+- **Primary Keys**: Singular `<entity>_id` (e.g., `user_id`, `ride_id`, `branch_id`).
+- **Foreign Keys**: Match the referenced primary key name wherever unambiguous, or `<role>_id` when referencing `core.users(user_id)` (e.g., `passenger_id`, `customer_id`, `reporter_id`).
+- **Boolean Flags**: `BIT` prefixed with `is_` or `has_` (e.g., `is_active`, `is_blocked`, `is_prepaid`, `is_takeout`).
+
+## Programmability Prefixes
+- **Views**: `vw_` (e.g., `core.vw_active_coupons`)
+- **Functions**: `fn_` (e.g., `core.fn_calculate_distance_km`)
+- **Stored Procedures**: `sp_` (e.g., `taxi.sp_respond_to_ride_offer`)
+- **Triggers**: `trg_<table>_<event>` (e.g., `core.trg_users_after_insert`)
+
+## Constraints & Indexes
+- **Primary Key**: `pk_<table>`
+- **Foreign Key**: `fk_<table>_<column>`
+- **Unique**: `uq_<table>_<column(s)>`
+- **Check**: `chk_<table>_<rule>`
+- **Nonclustered Indexes**: `ix_<table>_<columns_or_purpose>` (covering `INCLUDE` and filtered `WHERE` clauses defined in `schema/06_indexes.sql`)
+
+## Standard Data Types
+- **Currency (USD)**: `DECIMAL(10,2)`
+- **Percentages**: `DECIMAL(5,2)`
+- **Brand Commission Fraction**: `DECIMAL(5,4)`
+- **Ratings**: `DECIMAL(3,2)` (`0.00` to `5.00`)
+- **Latitude / Longitude**: `DECIMAL(10,8)` / `DECIMAL(11,8)`
+- **Person Names / Usernames**: `VARCHAR(50)`
+- **Email Addresses**: `VARCHAR(100)`
+- **Password Hashes**: `VARCHAR(255)`
+- **Phone Numbers / National IDs**: `VARCHAR(15)` to `VARCHAR(20)`
+- **License Plates**: `VARCHAR(20)`
+- **Status / Type Enumerations**: `VARCHAR(15)` to `VARCHAR(20)`
+- **Free-form Descriptions / JSON Payloads**: `NVARCHAR(MAX)`

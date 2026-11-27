@@ -2,7 +2,7 @@ USE mini_snapp;
 GO
 
 
--- 1. Taxi Base Tables (Unified & Patched)
+-- 1. Taxi Base Tables
 
 CREATE TABLE taxi.drivers(
     driver_id INT IDENTITY(1,1) NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE taxi.drivers(
     gender VARCHAR(15),
     average_rating DECIMAL(3,2) DEFAULT 0.00,
     rating_count INT DEFAULT 0,
-    activity_points INT DEFAULT 0, -- rank ba tarkib avg rating va activity_point hesab mishe
+    activity_points INT DEFAULT 0, -- Composite rank is derived from average_rating and activity_points
 
     CONSTRAINT pk_drivers_driver_id
         PRIMARY KEY (driver_id),
@@ -77,7 +77,7 @@ GO
 CREATE TABLE taxi.driver_wallets(
     driver_wallet_id INT IDENTITY(1,1) NOT NULL ,
     driver_id INT NOT NULL,
-    balance DECIMAL(10,2) DEFAULT 0 ,
+    balance DECIMAL(10,2) NOT NULL DEFAULT 0 ,
 
     CONSTRAINT pk_driver_wallets_driver_wallet_id
         PRIMARY KEY (driver_wallet_id),
@@ -86,7 +86,10 @@ CREATE TABLE taxi.driver_wallets(
         FOREIGN KEY (driver_id) REFERENCES taxi.drivers(driver_id),
 
     CONSTRAINT uq_driver_wallets_driver_id
-        UNIQUE (driver_id)
+        UNIQUE (driver_id),
+
+    CONSTRAINT chk_driver_wallets_balance
+        CHECK (balance >= 0)
 );
 GO
 
@@ -113,13 +116,13 @@ CREATE TABLE taxi.driver_secondary_phones(
     CONSTRAINT pk_driver_secondary_phones_driver_secondary_phone_id
         PRIMARY KEY (driver_secondary_phone_id),
 
-    CONSTRAINT fk_driver_secondary_phones_id_driver_id
+    CONSTRAINT fk_driver_secondary_phones_driver_id
         FOREIGN KEY (driver_id) REFERENCES taxi.drivers(driver_id),
 
     CONSTRAINT uq_driver_secondary_phones_driver_id_phone_number
-        UNIQUE (driver_id , phone_number),
+        UNIQUE (driver_id, phone_number),
 
-    CONSTRAINT uq_driver_secondary_phones__phone_number
+    CONSTRAINT uq_driver_secondary_phones_phone_number
         UNIQUE (phone_number)
 );
 GO
@@ -205,7 +208,7 @@ CREATE TABLE taxi.ride_payments(
     CONSTRAINT fk_ride_payments_ride_id
         FOREIGN KEY (ride_id) REFERENCES taxi.rides(ride_id),
 
-    CONSTRAINT fk_ride_payment_ride_transaction_id
+    CONSTRAINT fk_ride_payments_transaction_id
         FOREIGN KEY (ride_payment_transaction_id) REFERENCES core.transactions(transaction_id),
 
     CONSTRAINT uq_ride_payments_transaction_id
@@ -339,17 +342,10 @@ CREATE TABLE taxi.ride_offer_candidates(
 GO
 
 
--- 2. Performance Indexes
+-- 2. Cross-Schema Foreign Keys
 
 
-CREATE NONCLUSTERED INDEX IX_rides_passenger_id ON taxi.rides(passenger_id);
-GO
-
-CREATE NONCLUSTERED INDEX IX_rides_driver_id ON taxi.rides(driver_id);
-GO
-
-CREATE NONCLUSTERED INDEX IX_ride_offers_passenger_id ON taxi.ride_offers(passenger_id);
-GO
-
-CREATE NONCLUSTERED INDEX IX_ride_offer_candidates_driver_id ON taxi.ride_offer_candidates(driver_id);
+ALTER TABLE core.coupon_usages
+    ADD CONSTRAINT fk_coupon_usages_ride_id
+    FOREIGN KEY (ride_id) REFERENCES taxi.rides(ride_id);
 GO

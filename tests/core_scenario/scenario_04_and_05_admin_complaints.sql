@@ -25,8 +25,9 @@ WHERE u.user_id = @new_admin_uid;
 
 PRINT '--- SCENARIO 5 | STEP 1: Submit New Complaint (Open) ---';
 DECLARE @u_id INT = (SELECT user_id FROM core.users WHERE username = 'future_admin');
+DECLARE @target_branch_id INT = ISNULL((SELECT TOP 1 branch_id FROM food.branches), 1);
 INSERT INTO core.complaints (reporter_id, target_type, target_id, title, complaint_description, complaint_status)
-VALUES (@u_id, 'branch', 10, 'Terrible packaging', 'The food spilled everywhere!', 'open');
+VALUES (@u_id, 'branch', @target_branch_id, 'Terrible packaging', 'The food spilled everywhere!', 'open');
 DECLARE @comp_id INT = SCOPE_IDENTITY();
 
 
