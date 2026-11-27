@@ -54,9 +54,15 @@ BEGIN
         
         SET @new_driver_id = SCOPE_IDENTITY();
         
-        UPDATE core.users
-        SET role_id = @driver_role_id
-        WHERE user_id = @user_id;
+        IF @driver_role_id IS NOT NULL
+        BEGIN
+            UPDATE u
+            SET u.role_id = @driver_role_id
+            FROM core.users u
+            JOIN core.roles r ON u.role_id = r.role_id
+            WHERE u.user_id = @user_id
+              AND r.hierarchy_level < 2;
+        END
 
         INSERT INTO taxi.driver_wallets (driver_id, balance)
         VALUES (@new_driver_id, 0);
@@ -259,166 +265,19 @@ BEGIN
  
         INSERT INTO taxi.ride_offer_candidates 
             (offer_id, driver_id)
-        SELECT @new_offer_id, driver_id
+        SELECT @new_offer_id, nd.driver_id
         FROM taxi.fn_find_nearest_available_drivers
             (@origin_latitude, @origin_longitude, @vehicle_type,
-             @service_type, @candidate_count);
+             @service_type, @candidate_count) nd
+        JOIN taxi.drivers d ON d.driver_id = nd.driver_id
+        WHERE d.user_id <> @passenger_id;
  
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        IF @@TRANCOUNT > 0 
-        BEGIN
+        IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-            ;THROW;
-        END
-    END CATCH
-END
-GO
-
-CREATE OR ALTER PROCEDURE taxi.sp_respond_to_ride_offer
-    @offer_id INT,
-    @driver_id INT,
-    @response VARCHAR(20),
-    @new_ride_id INT OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    IF @response NOT IN ('accepted','rejected')
-    BEGIN
-        RAISERROR('Response must be either accepted or rejected.', 16, 1);
-        RETURN;
-    END
-
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM taxi.ride_offer_candidates 
-        WHERE offer_id = @offer_id 
-            AND driver_id = @driver_id 
-            AND response_status = 'pending'  
-    )
-    BEGIN
-        RAISERROR('No pending candidate row found for this offer/driver.', 16, 1);
-        RETURN;
-    END
-        
-    BEGIN TRY
-        BEGIN TRANSACTION;
- 
-        UPDATE taxi.ride_offer_candidates
-        SET response_status = @response, 
-            responded_at = GETDATE()
-        WHERE offer_id = @offer_id 
-            AND driver_id = @driver_id;
- 
-        IF @response = 'accepted'
-        BEGIN
-            DECLARE @passenger_id INT;
-            DECLARE @origin_lat DECIMAL(10,8);
-            DECLARE @origin_lng DECIMAL(11,8);
-            DECLARE @dest_lat DECIMAL(10,8);
-            DECLARE @dest_lng DECIMAL(11,8);
-            DECLARE @price DECIMAL(10,2);
-            DECLARE @vehicle_type VARCHAR(20);
-            DECLARE @service_type VARCHAR(20);
-            DECLARE @distance_km DECIMAL(10,2);
-            DECLARE @vehicle_id INT;
-            DECLARE @now DATETIME = GETDATE();
-            DECLARE @expires_at DATETIME;
-            DECLARE @requested_at DATETIME;
-            
-            DECLARE @is_prepaid BIT;
-            DECLARE @scheduled_start_time DATETIME;
-            DECLARE @initial_payment_status VARCHAR(20);
-            DECLARE @initial_ride_status VARCHAR(20);
- 
-            SELECT 
-                @passenger_id = passenger_id,
-                @origin_lat = origin_latitude,
-                @origin_lng = origin_longitude,
-                @dest_lat = destination_latitude,
-                @dest_lng = destination_longitude,
-                @price = calculated_price,
-                @vehicle_type = vehicle_type,
-                @service_type = service_type,
-                @requested_at = requested_at,
-                @expires_at = expires_at,
-                @is_prepaid = is_prepaid,
-                @scheduled_start_time = scheduled_start_time
-            FROM taxi.ride_offers 
-            WHERE ride_offer_id = @offer_id;
- 
-            SELECT TOP 1 @vehicle_id = vehicle_id 
-            FROM taxi.vehicles 
-            WHERE owner_id = @driver_id 
-                AND vehicle_type = @vehicle_type 
-                AND is_active_now = 1;
- 
-            IF @vehicle_id IS NULL
-            BEGIN
-                RAISERROR('Driver has no active vehicle of the requested type.', 16, 1);
-                ROLLBACK TRANSACTION;
-                RETURN;
-            END
-
-            IF taxi.fn_vehicle_supports_service(@vehicle_id, @service_type) = 0
-            BEGIN
-                RAISERROR('Driver''s active vehicle does not support the requested service type.', 16, 1);
-                ROLLBACK TRANSACTION;
-                RETURN;
-            END
-
-            IF @expires_at <= GETDATE()
-            BEGIN
-                RAISERROR('The offer has already expired!', 16, 1);
-                ROLLBACK TRANSACTION;
-                RETURN;
-            END
- 
-            SET @distance_km = core.fn_calculate_distance_km(@origin_lat, @origin_lng, @dest_lat, @dest_lng);
-            
-            SET @initial_payment_status = CASE WHEN @is_prepaid = 1 THEN 'paid' ELSE 'pending' END;
-            
-            SET @initial_ride_status = CASE 
-                WHEN @scheduled_start_time > @now THEN 'scheduled' 
-                ELSE 'to_origin' 
-            END;
- 
-            INSERT INTO taxi.rides
-                (passenger_id, driver_id, vehicle_id, origin_latitude,
-                origin_longitude, destination_latitude, destination_longitude,
-                estimated_distance, calculated_price, allocated_discount,
-                service_type, requested_at, accepted_at, ride_status,
-                ride_payment_status, scheduled_start_time)
-            VALUES 
-                (@passenger_id, @driver_id, @vehicle_id, @origin_lat,
-                @origin_lng, @dest_lat, @dest_lng, @distance_km, @price,
-                0, @service_type, @requested_at, @now, @initial_ride_status,
-                @initial_payment_status, @scheduled_start_time);
- 
-            SET @new_ride_id = SCOPE_IDENTITY();
- 
-            UPDATE taxi.ride_offer_candidates 
-            SET response_status = 'timeout',
-                responded_at = GETDATE() 
-            WHERE offer_id = @offer_id 
-                AND driver_id <> @driver_id 
-                AND response_status = 'pending';
-    
-            UPDATE taxi.drivers 
-            SET driver_status = 'busy' 
-            WHERE driver_id = @driver_id;
-        END
- 
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 
-        BEGIN
-            ROLLBACK TRANSACTION;
-            ;THROW;
-        END
+        ;THROW;
     END CATCH
 END
 GO
@@ -456,29 +315,39 @@ BEGIN
     END
 
     DECLARE @net_amount DECIMAL(10,2) = @final_price - ISNULL(@discount, 0);
+    IF @net_amount < 0 SET @net_amount = 0;
 
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        DECLARE @transaction_id INT;
-
-        INSERT INTO core.transactions
-            (user_id, transaction_type, transaction_status, amount, payment_method)
-        VALUES
-            (@passenger_id, 'ride_payment', 'completed', @net_amount, @payment_method);
-
-        SET @transaction_id = SCOPE_IDENTITY();
-
-        INSERT INTO taxi.ride_payments
-            (ride_id, ride_payment_transaction_id)
-        VALUES
-            (@ride_id, @transaction_id);
-
-        IF @payment_method = 'wallet'
+        IF @net_amount > 0
         BEGIN
-            UPDATE core.user_wallets
-            SET balance = balance - @net_amount
-            WHERE user_id = @passenger_id;
+            IF @payment_method = 'wallet'
+            BEGIN
+                UPDATE core.user_wallets
+                SET balance = balance - @net_amount
+                WHERE user_id = @passenger_id
+                  AND balance >= @net_amount;
+
+                IF @@ROWCOUNT = 0
+                BEGIN
+                    RAISERROR('Insufficient wallet balance.', 16, 1);
+                END
+            END
+
+            DECLARE @transaction_id INT;
+
+            INSERT INTO core.transactions
+                (user_id, transaction_type, transaction_status, amount, payment_method)
+            VALUES
+                (@passenger_id, 'ride_payment', 'completed', @net_amount, @payment_method);
+
+            SET @transaction_id = SCOPE_IDENTITY();
+
+            INSERT INTO taxi.ride_payments
+                (ride_id, ride_payment_transaction_id)
+            VALUES
+                (@ride_id, @transaction_id);
         END
 
         UPDATE taxi.rides
@@ -489,10 +358,170 @@ BEGIN
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
-        BEGIN
             ROLLBACK TRANSACTION;
-            ;THROW;
+        ;THROW;
+    END CATCH
+END
+GO
+
+CREATE OR ALTER PROCEDURE taxi.sp_respond_to_ride_offer
+    @offer_id INT,
+    @driver_id INT,
+    @response VARCHAR(20),
+    @new_ride_id INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    IF @response NOT IN ('accepted','rejected')
+    BEGIN
+        RAISERROR('Response must be either accepted or rejected.', 16, 1);
+        RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM taxi.ride_offer_candidates 
+        WHERE offer_id = @offer_id 
+            AND driver_id = @driver_id 
+            AND response_status = 'pending'  
+    )
+    BEGIN
+        RAISERROR('No pending candidate row found for this offer/driver.', 16, 1);
+        RETURN;
+    END
+        
+    BEGIN TRY
+        BEGIN TRANSACTION;
+ 
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM taxi.ride_offer_candidates WITH (UPDLOCK, ROWLOCK)
+            WHERE offer_id = @offer_id 
+                AND driver_id = @driver_id 
+                AND response_status = 'pending'
+        )
+        BEGIN
+            RAISERROR('Offer is no longer pending for this driver.', 16, 1);
         END
+
+        UPDATE taxi.ride_offer_candidates
+        SET response_status = @response, 
+            responded_at = GETDATE()
+        WHERE offer_id = @offer_id 
+            AND driver_id = @driver_id;
+ 
+        IF @response = 'accepted'
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM taxi.drivers WITH (UPDLOCK, ROWLOCK)
+                WHERE driver_id = @driver_id
+                  AND driver_status = 'available'
+            )
+            BEGIN
+                RAISERROR('Driver is not currently available to accept a ride.', 16, 1);
+            END
+
+            DECLARE @passenger_id INT;
+            DECLARE @origin_lat DECIMAL(10,8);
+            DECLARE @origin_lng DECIMAL(11,8);
+            DECLARE @dest_lat DECIMAL(10,8);
+            DECLARE @dest_lng DECIMAL(11,8);
+            DECLARE @price DECIMAL(10,2);
+            DECLARE @vehicle_type VARCHAR(20);
+            DECLARE @service_type VARCHAR(20);
+            DECLARE @distance_km DECIMAL(10,2);
+            DECLARE @vehicle_id INT;
+            DECLARE @now DATETIME = GETDATE();
+            DECLARE @expires_at DATETIME;
+            DECLARE @requested_at DATETIME;
+            
+            DECLARE @is_prepaid BIT;
+            DECLARE @scheduled_start_time DATETIME;
+            DECLARE @initial_ride_status VARCHAR(20);
+ 
+            SELECT 
+                @passenger_id = passenger_id,
+                @origin_lat = origin_latitude,
+                @origin_lng = origin_longitude,
+                @dest_lat = destination_latitude,
+                @dest_lng = destination_longitude,
+                @price = calculated_price,
+                @vehicle_type = vehicle_type,
+                @service_type = service_type,
+                @requested_at = requested_at,
+                @expires_at = expires_at,
+                @is_prepaid = is_prepaid,
+                @scheduled_start_time = scheduled_start_time
+            FROM taxi.ride_offers 
+            WHERE ride_offer_id = @offer_id;
+ 
+            SELECT TOP 1 @vehicle_id = vehicle_id 
+            FROM taxi.vehicles 
+            WHERE owner_id = @driver_id 
+                AND vehicle_type = @vehicle_type 
+                AND is_active_now = 1;
+ 
+            IF @vehicle_id IS NULL
+            BEGIN
+                RAISERROR('Driver has no active vehicle of the requested type.', 16, 1);
+            END
+
+            IF taxi.fn_vehicle_supports_service(@vehicle_id, @service_type) = 0
+            BEGIN
+                RAISERROR('Driver''s active vehicle does not support the requested service type.', 16, 1);
+            END
+
+            IF @expires_at <= GETDATE()
+            BEGIN
+                RAISERROR('The offer has already expired!', 16, 1);
+            END
+ 
+            SET @distance_km = core.fn_calculate_distance_km(@origin_lat, @origin_lng, @dest_lat, @dest_lng);
+            
+            SET @initial_ride_status = CASE 
+                WHEN @scheduled_start_time > @now THEN 'scheduled' 
+                ELSE 'to_origin' 
+            END;
+ 
+            INSERT INTO taxi.rides
+                (passenger_id, driver_id, vehicle_id, origin_latitude,
+                origin_longitude, destination_latitude, destination_longitude,
+                estimated_distance, calculated_price, allocated_discount,
+                service_type, requested_at, accepted_at, ride_status,
+                ride_payment_status, scheduled_start_time)
+            VALUES 
+                (@passenger_id, @driver_id, @vehicle_id, @origin_lat,
+                @origin_lng, @dest_lat, @dest_lng, @distance_km, @price,
+                0, @service_type, @requested_at, @now, @initial_ride_status,
+                'pending', @scheduled_start_time);
+ 
+            SET @new_ride_id = SCOPE_IDENTITY();
+
+            IF @is_prepaid = 1
+            BEGIN
+                EXEC taxi.sp_pay_for_ride @ride_id = @new_ride_id, @payment_method = 'wallet';
+            END
+ 
+            UPDATE taxi.ride_offer_candidates 
+            SET response_status = 'timeout',
+                responded_at = GETDATE() 
+            WHERE offer_id = @offer_id 
+                AND driver_id <> @driver_id 
+                AND response_status = 'pending';
+    
+            UPDATE taxi.drivers 
+            SET driver_status = 'busy' 
+            WHERE driver_id = @driver_id;
+        END
+ 
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
     END CATCH
 END
 GO
@@ -646,12 +675,14 @@ BEGIN
  
 
         UPDATE taxi.driver_wallets 
-        SET balance = balance + (@net_amount * @driver_share / 100)
+        SET balance = balance + (@net_amount * @driver_share / 100.0)
         WHERE driver_id = @driver_id;
 
+        IF NOT EXISTS (SELECT 1 FROM core.app_wallets)
+            INSERT INTO core.app_wallets (total_balance) VALUES (0);
 
-        UPDATE core.app_wallets
-        SET total_balance = total_balance + (@net_amount * @app_share / 100);
+        UPDATE TOP (1) core.app_wallets
+        SET total_balance = total_balance + (@net_amount * @app_share / 100.0);
         
     
         UPDATE taxi.drivers 
@@ -661,11 +692,9 @@ BEGIN
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        IF @@TRANCOUNT > 0 
-        BEGIN
+        IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-            ;THROW;
-        END
+        ;THROW;
     END CATCH
 END
 
@@ -723,11 +752,9 @@ BEGIN
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        IF @@TRANCOUNT > 0 
-        BEGIN
+        IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-            ;THROW;
-        END
+        ;THROW;
     END CATCH
 END
 GO

@@ -39,7 +39,7 @@ CREATE TABLE core.coupons (
     amount DECIMAL(10,2),
     min_requirement DECIMAL(10,2),
     max_cap DECIMAL(10,2),
-    [expiry_date] DATETIME , -- اگه نال باشه یعنی بدون محدودیت زمان مثلا برای اولین خرید همه
+    [expiry_date] DATETIME, -- NULL indicates no expiration date (e.g., welcome promo)
     current_usage INT DEFAULT 0,
     max_usage INT NOT NULL,
     is_active BIT DEFAULT 1,
@@ -51,7 +51,11 @@ CREATE TABLE core.coupons (
         UNIQUE (code),
 
     CONSTRAINT chk_coupons_value 
-        CHECK( [percentage] IS NOT NULL OR amount IS NOT NULL)
+        CHECK ([percentage] IS NOT NULL OR amount IS NOT NULL),
+
+    CONSTRAINT chk_coupons_percentage
+        CHECK ([percentage] IS NULL OR ([percentage] > 0 AND [percentage] <=100))
+
 );
 GO
 
@@ -143,7 +147,10 @@ CREATE TABLE core.user_wallets (
         UNIQUE (user_id),
 
     CONSTRAINT fk_user_wallets_user_id 
-        FOREIGN KEY (user_id) REFERENCES core.users(user_id)
+        FOREIGN KEY (user_id) REFERENCES core.users(user_id),
+
+    CONSTRAINT chk_user_wallets_balance 
+        CHECK (balance >= 0)
 );
 GO
 
@@ -176,7 +183,7 @@ CREATE TABLE core.saved_accounts (
     CONSTRAINT pk_saved_accounts 
         PRIMARY KEY (saved_account_id),
 
-    CONSTRAINT fk_saved_acounts_user_id 
+    CONSTRAINT fk_saved_accounts_user_id 
         FOREIGN KEY (user_id) REFERENCES core.users(user_id)
 );
 GO
@@ -209,7 +216,10 @@ CREATE TABLE core.transactions (
             'pending','completed','failed','reversed')),
     
     CONSTRAINT chk_transactions_payment_method 
-        CHECK (payment_method IN ('wallet','card','cash'))
+        CHECK (payment_method IN ('wallet','card','cash')),
+
+    CONSTRAINT chk_transactions_amount 
+        CHECK (amount > 0)
 );
 GO
 
@@ -220,7 +230,7 @@ CREATE TABLE core.addresses (
     province VARCHAR(100) NOT NULL,
     city VARCHAR(100) NOT NULL,
     street VARCHAR(100) NOT NULL,
-    description_text TEXT,
+    description_text NVARCHAR(MAX),
     latitude DECIMAL(10,8) NOT NULL,
     longitude DECIMAL(11,8) NOT NULL,
 
@@ -238,8 +248,8 @@ CREATE TABLE core.complaints (
     target_type VARCHAR(20)  NOT NULL,
     target_id INT NOT NULL,
     title VARCHAR(150) NOT NULL,
-    complaint_description TEXT NOT NULL,
-    complaint_status VARCHAR(15)  NOT NULL DEFAULT 'open',
+    complaint_description NVARCHAR(MAX) NOT NULL,
+    complaint_status VARCHAR(15) NOT NULL DEFAULT 'open',
     assigned_admin_id INT ,
     created_at DATETIME DEFAULT GETDATE(),
     resolved_at DATETIME ,
@@ -271,7 +281,7 @@ CREATE TABLE core.core_logs (
     old_value NVARCHAR(MAX) ,
     new_value NVARCHAR(MAX) ,
     created_at DATETIME DEFAULT GETDATE(),
-    [description] TEXT ,
+    [description] NVARCHAR(MAX),
 
     CONSTRAINT pk_core_logs 
         PRIMARY KEY (core_log_id),
@@ -305,7 +315,10 @@ CREATE TABLE core.coupon_usages (
         FOREIGN KEY (user_id) REFERENCES core.users(user_id),
     
     CONSTRAINT chk_coupon_usages_order_or_ride
-        CHECK (order_id IS NOT NULL OR ride_id IS NOT NULL)
+        CHECK (
+            (order_id IS NOT NULL AND ride_id IS NULL) OR
+            (order_id IS NULL AND ride_id IS NOT NULL)
+        )
 );
 GO
 

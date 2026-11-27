@@ -1,0 +1,27 @@
+name: Database CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    name: Build Schema, Run SQL Tests & Seed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run SQL Server & Automated Test Suites via Docker Compose
+        env:
+          MSSQL_SA_PASSWORD: ${{ secrets.MSSQL_SA_PASSWORD || 'MiniSnapp!2026' }}
+        run: |
+          docker compose up --abort-on-container-exit --exit-code-from db-init
+
+      - name: Tear down containers and volumes
+        if: always()
+        run: |
+          docker compose down -v

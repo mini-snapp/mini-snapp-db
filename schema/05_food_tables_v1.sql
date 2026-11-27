@@ -16,7 +16,7 @@ CREATE TABLE food.brands (
     CONSTRAINT uq_brands_name 
         UNIQUE (name),
 
-    CONSTRAINT ck_brands_average_rating 
+    CONSTRAINT chk_brands_average_rating 
         CHECK (average_rating BETWEEN 0 AND 5)
 );
 
@@ -49,8 +49,8 @@ CREATE TABLE food.branches (
     province VARCHAR(50) NOT NULL,
     city VARCHAR(50) NOT NULL,
     street VARCHAR(150) NOT NULL,
-    latitude DECIMAL(9,6) NOT NULL,
-    longitude DECIMAL(9,6) NOT NULL,
+    latitude DECIMAL(10,8) NOT NULL,
+    longitude DECIMAL(11,8) NOT NULL,
     email VARCHAR(100),
     food_type VARCHAR(50) NOT NULL,
     max_delivery_distance DECIMAL(6,2) NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE food.branches (
     CONSTRAINT fk_branches_brand 
         FOREIGN KEY (brand_id) REFERENCES food.brands(brand_id),
 
-    CONSTRAINT ck_branches_rating 
+    CONSTRAINT chk_branches_rating 
         CHECK (rating BETWEEN 0 AND 5)
 );
 
@@ -72,7 +72,7 @@ GO
 CREATE TABLE food.branch_wallets (
     branch_wallet_id INT IDENTITY(1,1) NOT NULL,
     branch_id INT NOT NULL,
-    balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+    balance DECIMAL(10,2) NOT NULL DEFAULT 0,
 
     CONSTRAINT pk_branch_wallets 
         PRIMARY KEY (branch_wallet_id),
@@ -81,7 +81,10 @@ CREATE TABLE food.branch_wallets (
         UNIQUE (branch_id),
 
     CONSTRAINT fk_branch_wallets_branch 
-        FOREIGN KEY (branch_id) REFERENCES food.branches(branch_id)
+        FOREIGN KEY (branch_id) REFERENCES food.branches(branch_id),
+
+    CONSTRAINT chk_branch_wallets_balance 
+        CHECK (balance >=0)
 );
 
 GO
@@ -158,7 +161,7 @@ CREATE TABLE food.work_schedules (
     CONSTRAINT uq_work_schedules_branch_day 
         UNIQUE (branch_id, day_of_week),
 
-    CONSTRAINT ck_work_schedules_day_of_week 
+    CONSTRAINT chk_work_schedules_day_of_week 
         CHECK (day_of_week BETWEEN 0 AND 6)
 );
 
@@ -178,7 +181,7 @@ CREATE TABLE food.foods (
     CONSTRAINT fk_foods_brand 
         FOREIGN KEY (brand_id) REFERENCES food.brands(brand_id),
 
-    CONSTRAINT ck_foods_average_rating 
+    CONSTRAINT chk_foods_average_rating 
         CHECK (average_rating BETWEEN 0 AND 5)
 );
 
@@ -224,7 +227,7 @@ CREATE TABLE food.menu_items (
     CONSTRAINT uq_menu_items_branch_food 
         UNIQUE (branch_id, food_id),
 
-    CONSTRAINT ck_menu_items_average_rating 
+    CONSTRAINT chk_menu_items_average_rating 
         CHECK (average_rating BETWEEN 0 AND 5)
 );
 
@@ -245,7 +248,7 @@ CREATE TABLE food.menu_discounts (
     CONSTRAINT fk_menu_discounts_menu_item 
         FOREIGN KEY (menu_item_id) REFERENCES food.menu_items(menu_item_id),
 
-    CONSTRAINT ck_menu_discounts_date_range 
+    CONSTRAINT chk_menu_discounts_date_range 
         CHECK (end_at > start_at)
 
 );
@@ -274,7 +277,7 @@ CREATE TABLE food.cart_items (
     CONSTRAINT uq_cart_items_user_branch_menu_item 
         UNIQUE (user_id, branch_id, menu_item_id),
 
-    CONSTRAINT ck_cart_items_quantity 
+    CONSTRAINT chk_cart_items_quantity 
         CHECK (quantity > 0)
 );
 
@@ -301,7 +304,7 @@ GO
 
 CREATE TABLE food.food_logs (
     food_log_id INT IDENTITY(1,1) NOT NULL,
-    actor_id INT NOT NULL,
+    actor_id INT NULL,
     operation_type VARCHAR(50) NOT NULL,
     schema_name VARCHAR(50) NOT NULL,
     target_table VARCHAR(50) NOT NULL,
@@ -322,9 +325,6 @@ CREATE TABLE food.food_logs (
         FOREIGN KEY (branch_id) REFERENCES food.branches(branch_id)
 );
 
-GO
-
-USE mini_snapp;
 GO
 
 CREATE TABLE food.food_orders (
@@ -358,11 +358,11 @@ CREATE TABLE food.food_orders (
         FOREIGN KEY (delivery_address_id) REFERENCES core.addresses(address_id),
     CONSTRAINT fk_food_orders_ride
         FOREIGN KEY (ride_id) REFERENCES taxi.rides(ride_id),
-    CONSTRAINT ck_food_orders_status
+    CONSTRAINT chk_food_orders_status
         CHECK (status IN ('pending','confirmed','preparing','picked_up','delivered','cancelled','disputed')),
-    CONSTRAINT ck_food_orders_rating
+    CONSTRAINT chk_food_orders_rating
         CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
-    CONSTRAINT ck_food_orders_delivery_address
+    CONSTRAINT chk_food_orders_delivery_address
         CHECK (is_takeout = 1 OR delivery_address_id IS NOT NULL)
 );
 
@@ -380,7 +380,7 @@ CREATE TABLE food.order_items (
         FOREIGN KEY (order_id) REFERENCES food.food_orders(order_id),
     CONSTRAINT fk_order_items_menu_item
         FOREIGN KEY (menu_item_id) REFERENCES food.menu_items(menu_item_id),
-    CONSTRAINT ck_order_items_quantity
+    CONSTRAINT chk_order_items_quantity
         CHECK (quantity > 0)
 );
 
@@ -390,16 +390,25 @@ CREATE TABLE food.order_payments (
     order_payment_id INT IDENTITY(1,1) NOT NULL,
     order_id INT NOT NULL,
     transaction_id INT NOT NULL,
+
+
     CONSTRAINT pk_order_payments
         PRIMARY KEY (order_payment_id),
+    
     CONSTRAINT fk_order_payments_order
         FOREIGN KEY (order_id) REFERENCES food.food_orders(order_id),
+    
     CONSTRAINT fk_order_payments_transaction
         FOREIGN KEY (transaction_id) REFERENCES core.transactions(transaction_id),
-    CONSTRAINT uq_order_payments_order
-        UNIQUE (order_id),
+
     CONSTRAINT uq_order_payments_transaction
         UNIQUE (transaction_id)
 );
 
+GO
+
+
+ALTER TABLE core.coupon_usages
+    ADD CONSTRAINT fk_coupon_usages_order_id
+    FOREIGN KEY (order_id) REFERENCES food.food_orders(order_id);
 GO

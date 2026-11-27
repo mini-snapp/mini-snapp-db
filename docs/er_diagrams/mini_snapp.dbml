@@ -1,0 +1,527 @@
+// Auto-generated from schema/03..05 via scripts/generate_erd.py
+// Compatible with https://dbdiagram.io
+
+Project mini_snapp {
+  database_type: 'SQL Server'
+  Note: 'Multi-domain super-app database (core, taxi, food)'
+}
+
+Table core.roles {
+  role_id INT [pk, increment]
+  role_name VARCHAR(20) [not null, unique]
+  role_description VARCHAR(150)
+  hierarchy_level INT [not null]
+}
+
+Table core.permissions {
+  permission_id INT [pk, increment]
+  permission_name VARCHAR(50) [not null, unique]
+  permission_description VARCHAR(150)
+}
+
+Table core.coupons {
+  coupon_id INT [pk, increment]
+  code VARCHAR(20) [not null, unique]
+  percentage DECIMAL(5,2)
+  amount DECIMAL(10,2)
+  min_requirement DECIMAL(10,2)
+  max_cap DECIMAL(10,2)
+  expiry_date DATETIME
+  current_usage INT
+  max_usage INT [not null]
+  is_active BIT
+}
+
+Table core.app_wallets {
+  app_wallet_id INT [pk, increment]
+  total_balance DECIMAL(10,2) [not null]
+}
+
+Table core.commission_rates {
+  commission_rate_id INT [pk, increment]
+  service_type VARCHAR(20) [not null]
+  driver_share DECIMAL(5,2) [not null]
+  restaurant_share DECIMAL(5,2)
+  app_share DECIMAL(5,2) [not null]
+  effective_from DATETIME [not null]
+  effective_to DATETIME
+}
+
+Table core.users {
+  user_id INT [pk, increment]
+  username VARCHAR(50) [not null, unique]
+  password_hash VARCHAR(255) [not null]
+  first_name VARCHAR(50)
+  last_name VARCHAR(50)
+  registration_phone VARCHAR(15) [not null, unique]
+  email VARCHAR(100)
+  role_id INT [not null]
+  created_at DATETIME
+  is_blocked BIT
+  deleted_at DATETIME
+}
+
+Table core.role_permissions {
+  role_permissions_id INT [pk, increment]
+  role_id INT [not null]
+  permission_id INT [not null]
+}
+
+Table core.user_wallets {
+  user_wallet_id INT [pk, increment]
+  user_id INT [not null, unique]
+  balance DECIMAL(10,2) [not null]
+}
+
+Table core.admins {
+  admin_id INT [pk, increment]
+  user_id INT [not null, unique]
+  admin_identifier VARCHAR(20) [not null, unique]
+  access_level VARCHAR(20) [not null]
+}
+
+Table core.saved_accounts {
+  saved_account_id INT [pk, increment]
+  user_id INT [not null]
+  card_number VARCHAR(20) [not null]
+  bank_name VARCHAR(50) [not null]
+}
+
+Table core.transactions {
+  transaction_id INT [pk, increment]
+  user_id INT [not null]
+  transaction_type VARCHAR(20) [not null]
+  transaction_status VARCHAR(15) [not null]
+  amount DECIMAL(10,2) [not null]
+  payment_method VARCHAR(15) [not null]
+  coupon_id INT
+  created_at DATETIME
+}
+
+Table core.addresses {
+  address_id INT [pk, increment]
+  user_id INT [not null]
+  address_name VARCHAR(50) [not null]
+  province VARCHAR(100) [not null]
+  city VARCHAR(100) [not null]
+  street VARCHAR(100) [not null]
+  description_text NVARCHAR(MAX)
+  latitude DECIMAL(10,8) [not null]
+  longitude DECIMAL(11,8) [not null]
+}
+
+Table core.complaints {
+  complaint_id INT [pk, increment]
+  reporter_id INT [not null]
+  target_type VARCHAR(20) [not null]
+  target_id INT [not null]
+  title VARCHAR(150) [not null]
+  complaint_description NVARCHAR(MAX) [not null]
+  complaint_status VARCHAR(15) [not null]
+  assigned_admin_id INT
+  created_at DATETIME
+  resolved_at DATETIME
+}
+
+Table core.core_logs {
+  core_log_id INT [pk, increment]
+  actor_id INT
+  operation_type VARCHAR(10) [not null]
+  schema_name VARCHAR(10) [not null]
+  target_table VARCHAR(50) [not null]
+  target_id VARCHAR(50) [not null]
+  old_value NVARCHAR(MAX)
+  new_value NVARCHAR(MAX)
+  created_at DATETIME
+  description NVARCHAR(MAX)
+}
+
+Table core.coupon_usages {
+  coupon_usage_id INT [pk, increment]
+  coupon_id INT [not null]
+  user_id INT [not null]
+  used_at DATETIME
+  order_id INT
+  ride_id INT
+}
+
+Table taxi.drivers {
+  driver_id INT [pk, increment]
+  user_id INT [not null, unique]
+  national_id VARCHAR(15) [not null, unique]
+  date_of_birth DATE [not null]
+  driver_status VARCHAR(20) [not null]
+  gender VARCHAR(15)
+  average_rating DECIMAL(3,2)
+  rating_count INT
+  activity_points INT
+}
+
+Table taxi.vehicles {
+  vehicle_id INT [pk, increment]
+  owner_id INT [not null]
+  vehicle_type VARCHAR(20) [not null]
+  license_plate VARCHAR(20) [not null, unique]
+  color VARCHAR(20) [not null]
+  model_name VARCHAR(20) [not null]
+  is_active_now BIT
+}
+
+Table taxi.vehicle_type_services {
+  vehicle_type VARCHAR(20) [pk]
+  service_type VARCHAR(20) [pk]
+}
+
+Table taxi.driver_wallets {
+  driver_wallet_id INT [pk, increment]
+  driver_id INT [not null, unique]
+  balance DECIMAL(10,2) [not null]
+}
+
+Table taxi.driver_locations {
+  driver_id INT [pk]
+  latitude DECIMAL(10,8)
+  longitude DECIMAL(11,8)
+  updated_at DATETIME
+}
+
+Table taxi.driver_secondary_phones {
+  driver_secondary_phone_id INT [pk, increment]
+  driver_id INT [not null]
+  phone_label VARCHAR(50)
+  phone_number VARCHAR(15) [not null, unique]
+}
+
+Table taxi.rides {
+  ride_id INT [pk, increment]
+  passenger_id INT [not null]
+  driver_id INT [not null]
+  vehicle_id INT [not null]
+  origin_province VARCHAR(100)
+  origin_city VARCHAR(100)
+  origin_street VARCHAR(100)
+  origin_latitude DECIMAL(10,8) [not null]
+  origin_longitude DECIMAL(11,8) [not null]
+  destination_province VARCHAR(100)
+  destination_city VARCHAR(100)
+  destination_street VARCHAR(100)
+  destination_latitude DECIMAL(10,8) [not null]
+  destination_longitude DECIMAL(11,8) [not null]
+  estimated_distance DECIMAL(10,2) [not null]
+  estimated_duration INT
+  calculated_price DECIMAL(10,2) [not null]
+  allocated_discount DECIMAL(10,2) [not null]
+  driver_rating_to_passenger INT
+  passenger_rating_to_driver INT
+  comment NVARCHAR(MAX)
+  service_type VARCHAR(20) [not null]
+  ride_status VARCHAR(20) [not null]
+  ride_payment_status VARCHAR(20) [not null]
+  requested_at DATETIME
+  scheduled_start_time DATETIME
+  accepted_at DATETIME
+  started_at DATETIME
+  completed_at DATETIME
+  cancelled_at DATETIME
+  cancel_reason VARCHAR(50)
+}
+
+Table taxi.ride_payments {
+  ride_id INT [pk]
+  ride_payment_transaction_id INT [not null, unique]
+}
+
+Table taxi.passenger_stats {
+  user_id INT [pk]
+  average_score DECIMAL(3,2)
+  score_count INT
+  activity_score INT
+}
+
+Table taxi.taxi_logs {
+  taxi_log_id INT [pk, increment]
+  actor_id INT
+  operation_type VARCHAR(10) [not null]
+  schema_name VARCHAR(10) [not null]
+  target_table VARCHAR(50) [not null]
+  target_id VARCHAR(50) [not null]
+  old_value NVARCHAR(MAX)
+  new_value NVARCHAR(MAX)
+  created_at DATETIME
+  description NVARCHAR(MAX)
+  driver_id INT
+  ride_id INT
+}
+
+Table taxi.pricing_parameters {
+  pricing_parameter_id INT [pk, increment]
+  vehicle_type VARCHAR(20) [not null]
+  service_type VARCHAR(20) [not null]
+  base_fare DECIMAL(10,2) [not null]
+  price_per_km DECIMAL(10,2) [not null]
+  price_per_minute DECIMAL(10,2) [not null]
+  effective_from DATETIME
+  effective_to DATETIME
+}
+
+Table taxi.ride_offers {
+  ride_offer_id INT [pk, increment]
+  passenger_id INT [not null]
+  origin_latitude DECIMAL(10,8) [not null]
+  origin_longitude DECIMAL(11,8) [not null]
+  destination_latitude DECIMAL(10,8) [not null]
+  destination_longitude DECIMAL(11,8) [not null]
+  calculated_price DECIMAL(10,2) [not null]
+  vehicle_type VARCHAR(20) [not null]
+  service_type VARCHAR(20) [not null]
+  is_prepaid BIT [not null]
+  scheduled_start_time DATETIME
+  requested_at DATETIME
+  expires_at DATETIME [not null]
+}
+
+Table taxi.ride_offer_candidates {
+  ride_offer_candidate_id INT [pk, increment]
+  offer_id INT [not null]
+  driver_id INT [not null]
+  notified_at DATETIME
+  responded_at DATETIME
+  response_status VARCHAR(20) [not null]
+}
+
+Table food.brands {
+  brand_id INT [pk, increment]
+  name VARCHAR(100) [not null, unique]
+  central_support_phone VARCHAR(20)
+  commission_rate DECIMAL(5,4)
+  average_rating DECIMAL(3,2) [not null]
+  rating_count INT [not null]
+  email VARCHAR(100)
+}
+
+Table food.brand_owners {
+  brand_owner_id INT [pk, increment]
+  user_id INT [not null]
+  brand_id INT [not null]
+}
+
+Table food.branches {
+  branch_id INT [pk, increment]
+  brand_id INT [not null]
+  rating DECIMAL(3,2) [not null]
+  province VARCHAR(50) [not null]
+  city VARCHAR(50) [not null]
+  street VARCHAR(150) [not null]
+  latitude DECIMAL(10,8) [not null]
+  longitude DECIMAL(11,8) [not null]
+  email VARCHAR(100)
+  food_type VARCHAR(50) [not null]
+  max_delivery_distance DECIMAL(6,2) [not null]
+  is_active BIT [not null]
+  rating_count INT [not null]
+}
+
+Table food.branch_wallets {
+  branch_wallet_id INT [pk, increment]
+  branch_id INT [not null, unique]
+  balance DECIMAL(10,2) [not null]
+}
+
+Table food.branch_owners {
+  branch_owner_id INT [pk, increment]
+  user_id INT [not null]
+  branch_id INT [not null]
+}
+
+Table food.restaurant_staff {
+  restaurant_staff_id INT [pk, increment]
+  user_id INT [not null]
+  branch_id INT [not null]
+}
+
+Table food.business_phones {
+  business_phone_id INT [pk, increment]
+  branch_id INT [not null]
+  phone_number VARCHAR(20) [not null]
+  phone_type VARCHAR(20) [not null]
+}
+
+Table food.work_schedules {
+  work_schedule_id INT [pk, increment]
+  branch_id INT [not null]
+  day_of_week INT [not null]
+  start_time TIME [not null]
+  end_time TIME [not null]
+  is_closed BIT [not null]
+}
+
+Table food.foods {
+  food_id INT [pk, increment]
+  brand_id INT [not null]
+  name VARCHAR(100) [not null]
+  category VARCHAR(50) [not null]
+  average_rating DECIMAL(3,2) [not null]
+  rating_count INT [not null]
+}
+
+Table food.food_ingredients {
+  food_ingredient_id INT [pk, increment]
+  food_id INT [not null]
+  ingredient_name VARCHAR(100) [not null]
+  amount DECIMAL(8,2) [not null]
+  unit VARCHAR(20) [not null]
+}
+
+Table food.menu_items {
+  menu_item_id INT [pk, increment]
+  branch_id INT [not null]
+  food_id INT [not null]
+  price DECIMAL(10,2) [not null]
+  availability_status BIT [not null]
+  average_rating DECIMAL(3,2) [not null]
+  rating_count INT [not null]
+  estimated_prep_time INT [not null]
+  available_from TIME
+  available_to TIME
+}
+
+Table food.menu_discounts {
+  menu_discount_id INT [pk, increment]
+  menu_item_id INT [not null]
+  percentage DECIMAL(5,2)
+  amount DECIMAL(10,2)
+  start_at DATETIME [not null]
+  end_at DATETIME [not null]
+  is_active BIT [not null]
+}
+
+Table food.cart_items {
+  cart_item_id INT [pk, increment]
+  user_id INT [not null]
+  branch_id INT [not null]
+  menu_item_id INT [not null]
+  quantity INT [not null]
+}
+
+Table food.customer_stats {
+  customer_stat_id INT [pk, increment]
+  user_id INT [not null, unique]
+  score INT [not null]
+  rank VARCHAR(20)
+}
+
+Table food.food_logs {
+  food_log_id INT [pk, increment]
+  actor_id INT
+  operation_type VARCHAR(50) [not null]
+  schema_name VARCHAR(50) [not null]
+  target_table VARCHAR(50) [not null]
+  target_id VARCHAR(50) [not null]
+  old_value NVARCHAR(MAX)
+  new_value NVARCHAR(MAX)
+  log_timestamp DATETIME [not null]
+  description VARCHAR(500)
+  branch_id INT [not null]
+}
+
+Table food.food_orders {
+  order_id INT [pk, increment]
+  customer_id INT [not null]
+  branch_id INT [not null]
+  delivery_address_id INT
+  delivery_fee DECIMAL(10,2) [not null]
+  final_price DECIMAL(10,2) [not null]
+  allocated_discount DECIMAL(10,2) [not null]
+  is_takeout BIT [not null]
+  ride_id INT
+  rating INT
+  comment NVARCHAR(1000)
+  created_at DATETIME [not null]
+  confirmed_at DATETIME
+  cooking_completed_at DATETIME
+  estimated_cooking_time INT
+  handed_to_courier_at DATETIME
+  delivered_at DATETIME
+  status VARCHAR(20) [not null]
+  rejection_reason VARCHAR(200)
+}
+
+Table food.order_items {
+  order_item_id INT [pk, increment]
+  order_id INT [not null]
+  menu_item_id INT [not null]
+  quantity INT [not null]
+  current_price DECIMAL(10,2) [not null]
+}
+
+Table food.order_payments {
+  order_payment_id INT [pk, increment]
+  order_id INT [not null]
+  transaction_id INT [not null, unique]
+}
+
+// Foreign Key Relationships
+Ref: core.users.role_id > core.roles.role_id
+Ref: core.role_permissions.role_id > core.roles.role_id
+Ref: core.role_permissions.permission_id > core.permissions.permission_id
+Ref: core.user_wallets.user_id > core.users.user_id
+Ref: core.admins.user_id > core.users.user_id
+Ref: core.saved_accounts.user_id > core.users.user_id
+Ref: core.transactions.user_id > core.users.user_id
+Ref: core.transactions.coupon_id > core.coupons.coupon_id
+Ref: core.addresses.user_id > core.users.user_id
+Ref: core.complaints.reporter_id > core.users.user_id
+Ref: core.complaints.assigned_admin_id > core.admins.admin_id
+Ref: core.core_logs.actor_id > core.users.user_id
+Ref: core.coupon_usages.coupon_id > core.coupons.coupon_id
+Ref: core.coupon_usages.user_id > core.users.user_id
+Ref: core.coupon_usages.ride_id > taxi.rides.ride_id
+Ref: core.coupon_usages.order_id > food.food_orders.order_id
+Ref: taxi.drivers.user_id > core.users.user_id
+Ref: taxi.vehicles.owner_id > taxi.drivers.driver_id
+Ref: taxi.driver_wallets.driver_id > taxi.drivers.driver_id
+Ref: taxi.driver_locations.driver_id > taxi.drivers.driver_id
+Ref: taxi.driver_secondary_phones.driver_id > taxi.drivers.driver_id
+Ref: taxi.rides.passenger_id > core.users.user_id
+Ref: taxi.rides.driver_id > taxi.drivers.driver_id
+Ref: taxi.rides.vehicle_id > taxi.vehicles.vehicle_id
+Ref: taxi.ride_payments.ride_id > taxi.rides.ride_id
+Ref: taxi.ride_payments.ride_payment_transaction_id > core.transactions.transaction_id
+Ref: taxi.passenger_stats.user_id > core.users.user_id
+Ref: taxi.taxi_logs.actor_id > core.users.user_id
+Ref: taxi.taxi_logs.driver_id > taxi.drivers.driver_id
+Ref: taxi.taxi_logs.ride_id > taxi.rides.ride_id
+Ref: taxi.pricing_parameters.vehicle_type, service_type > taxi.vehicle_type_services.vehicle_type, service_type
+Ref: taxi.ride_offers.passenger_id > core.users.user_id
+Ref: taxi.ride_offers.vehicle_type, service_type > taxi.vehicle_type_services.vehicle_type, service_type
+Ref: taxi.ride_offer_candidates.offer_id > taxi.ride_offers.ride_offer_id
+Ref: taxi.ride_offer_candidates.driver_id > taxi.drivers.driver_id
+Ref: food.brand_owners.user_id > core.users.user_id
+Ref: food.brand_owners.brand_id > food.brands.brand_id
+Ref: food.branches.brand_id > food.brands.brand_id
+Ref: food.branch_wallets.branch_id > food.branches.branch_id
+Ref: food.branch_owners.user_id > core.users.user_id
+Ref: food.branch_owners.branch_id > food.branches.branch_id
+Ref: food.restaurant_staff.user_id > core.users.user_id
+Ref: food.restaurant_staff.branch_id > food.branches.branch_id
+Ref: food.business_phones.branch_id > food.branches.branch_id
+Ref: food.work_schedules.branch_id > food.branches.branch_id
+Ref: food.foods.brand_id > food.brands.brand_id
+Ref: food.food_ingredients.food_id > food.foods.food_id
+Ref: food.menu_items.branch_id > food.branches.branch_id
+Ref: food.menu_items.food_id > food.foods.food_id
+Ref: food.menu_discounts.menu_item_id > food.menu_items.menu_item_id
+Ref: food.cart_items.user_id > core.users.user_id
+Ref: food.cart_items.branch_id > food.branches.branch_id
+Ref: food.cart_items.menu_item_id > food.menu_items.menu_item_id
+Ref: food.customer_stats.user_id > core.users.user_id
+Ref: food.food_logs.actor_id > core.users.user_id
+Ref: food.food_logs.branch_id > food.branches.branch_id
+Ref: food.food_orders.customer_id > core.users.user_id
+Ref: food.food_orders.branch_id > food.branches.branch_id
+Ref: food.food_orders.delivery_address_id > core.addresses.address_id
+Ref: food.food_orders.ride_id > taxi.rides.ride_id
+Ref: food.order_items.order_id > food.food_orders.order_id
+Ref: food.order_items.menu_item_id > food.menu_items.menu_item_id
+Ref: food.order_payments.order_id > food.food_orders.order_id
+Ref: food.order_payments.transaction_id > core.transactions.transaction_id

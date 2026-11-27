@@ -36,14 +36,17 @@ SELECT @app_wallet_before AS App_Company_Balance_Before;
 
 PRINT '--- TAXI SCENARIO 6 | STEP 2: Complete a Quick Ride ---';
 
-DECLARE @dummy_pass INT = (SELECT TOP 1 user_id FROM core.users WHERE username = 'demo_pass1');
+DECLARE @dummy_pass INT = ISNULL(
+    (SELECT TOP 1 user_id FROM core.users WHERE username = 'demo_pass1'),
+    (SELECT TOP 1 user_id FROM core.users WHERE username = 'avesta')
+);
 DECLARE @quick_offer INT, @quick_ride INT;
 
 
 EXEC taxi.sp_create_ride_offer 
     @passenger_id = @dummy_pass, 
-    @origin_latitude = 35.1, @origin_longitude = 51.1, 
-    @destination_latitude = 35.2, @destination_longitude = 51.2, 
+    @origin_latitude = 35.70100000, @origin_longitude = 51.40100000, 
+    @destination_latitude = 35.72000000, @destination_longitude = 51.42000000, 
     @vehicle_type = 'economy', @service_type = 'passenger', 
     @candidate_count = 1, @offer_ttl_minutes = 3, @is_prepaid = 0, @scheduled_start_time = NULL, 
     @new_offer_id = @quick_offer OUTPUT;

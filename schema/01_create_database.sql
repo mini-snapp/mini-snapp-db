@@ -1,3 +1,2 @@
-CREATE DATABASE mini_snapp
-
+CREATE DATABASE mini_snapp;
 GO
